@@ -3,7 +3,16 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { calcAngle, evaluateRule, evaluateRuleWithAngle, evaluatePose } = require('../public/pose-evaluator.js');
+const {
+  calcAngle,
+  evaluateRule,
+  evaluateRuleWithAngle,
+  evaluatePose,
+  edgeKey,
+  getRuleConnectors,
+  getConnectorStatusMap
+} = require('../public/pose-evaluator.js');
+const { renderSkeletonConnectors, DEFAULT_POSE_CONNECTIONS } = require('../public/script.js');
 
 const posesFilePath = path.join(__dirname, '..', 'public', 'poses.json');
 const posesRaw = fs.readFileSync(posesFilePath, 'utf8');
@@ -300,6 +309,296 @@ test('5. Full Pose Evaluation (evaluatePose)', async (t) => {
       assert.equal(typeof evalRes.allCorrect, 'boolean');
       assert.ok(Array.isArray(evalRes.results));
       assert.equal(evalRes.results.length, pose.rules.length);
+    });
+  }
+});
+
+test('6. Real-Time Skeleton Connector Mapping & Error Highlighting (R2)', async (t) => {
+  await t.test('edgeKey produces canonical symmetric keys', () => {
+    assert.equal(edgeKey(11, 13), '11-13');
+    assert.equal(edgeKey(13, 11), '11-13');
+    assert.equal(edgeKey(24, 12), '12-24');
+    assert.equal(edgeKey(12, 24), '12-24');
+    assert.equal(edgeKey(5, 5), '5-5');
+  });
+
+  await t.test('getRuleConnectors: Anatomical mappings for poses without elbow rules (t_pose, arms_up, arms_down)', () => {
+    const baselinePoses = ['t_pose', 'arms_up', 'arms_down'];
+    for (const key of baselinePoses) {
+      const pose = poses[key];
+      const leftArm = pose.rules.find(r => r.id === 'left_arm');
+      const rightArm = pose.rules.find(r => r.id === 'right_arm');
+      assert.ok(leftArm, `left_arm rule must exist in ${key}`);
+      assert.ok(rightArm, `right_arm rule must exist in ${key}`);
+
+      // Without elbow rule, arm rules highlight upper and forearm
+      assert.deepEqual(getRuleConnectors(leftArm, pose), [[11, 13], [13, 15]]);
+      assert.deepEqual(getRuleConnectors(rightArm, pose), [[12, 14], [14, 16]]);
+    }
+  });
+
+  await t.test('getRuleConnectors: Anatomical mappings for all 5 authentic ท่าแก้เกียจ poses (with elbow rules)', () => {
+    const kaeKiatKeys = ['kae_kiat_prep', 'kae_kiat_forward', 'kae_kiat_upward', 'kae_kiat_left', 'kae_kiat_right'];
+    for (const key of kaeKiatKeys) {
+      const pose = poses[key];
+      const leftArm = pose.rules.find(r => r.id === 'left_arm');
+      const rightArm = pose.rules.find(r => r.id === 'right_arm');
+      const leftElbow = pose.rules.find(r => r.id === 'left_elbow');
+      const rightElbow = pose.rules.find(r => r.id === 'right_elbow');
+
+      if (leftArm) {
+        assert.deepEqual(getRuleConnectors(leftArm, pose), [[11, 13]], `Pose ${key} left_arm should map to [[11, 13]]`);
+      }
+      if (rightArm) {
+        assert.deepEqual(getRuleConnectors(rightArm, pose), [[12, 14]], `Pose ${key} right_arm should map to [[12, 14]]`);
+      }
+      if (leftElbow) {
+        assert.deepEqual(getRuleConnectors(leftElbow, pose), [[11, 13], [13, 15]], `Pose ${key} left_elbow should map to [[11, 13], [13, 15]]`);
+      }
+      if (rightElbow) {
+        assert.deepEqual(getRuleConnectors(rightElbow, pose), [[12, 14], [14, 16]], `Pose ${key} right_elbow should map to [[12, 14], [14, 16]]`);
+      }
+    }
+  });
+
+  await t.test('getRuleConnectors: Anatomical mappings for lower body joints (knee, hip)', () => {
+    assert.deepEqual(getRuleConnectors({ id: 'left_knee' }), [[23, 25], [25, 27]]);
+    assert.deepEqual(getRuleConnectors({ id: 'right_knee' }), [[24, 26], [26, 28]]);
+    assert.deepEqual(getRuleConnectors({ id: 'left_hip' }), [[11, 23], [23, 25]]);
+    assert.deepEqual(getRuleConnectors({ id: 'right_hip' }), [[12, 24], [24, 26]]);
+  });
+
+  await t.test('getRuleConnectors: Explicit rule.connectors takes precedence over heuristics', () => {
+    const customRule = {
+      id: 'left_arm',
+      connectors: [[11, 12], [23, 24]]
+    };
+    assert.deepEqual(getRuleConnectors(customRule, poses.kae_kiat_forward), [[11, 12], [23, 24]]);
+  });
+
+  await t.test('getRuleConnectors: Fallbacks and edge cases', () => {
+    // 3-landmark generic fallback
+    const genericRule = { id: 'custom_neck', landmarks: [0, 11, 12] };
+    assert.deepEqual(getRuleConnectors(genericRule), [[0, 11], [11, 12]]);
+
+    // Missing rule or empty landmarks
+    assert.deepEqual(getRuleConnectors(null), []);
+    assert.deepEqual(getRuleConnectors({ id: 'unknown' }), []);
+  });
+
+  await t.test('getConnectorStatusMap: All rules passing marks all monitored edges conforming and 0 failed', () => {
+    const pose = poses.kae_kiat_forward;
+    const ruleResults = [
+      { rule: { id: 'left_arm' }, ok: true },
+      { rule: { id: 'right_arm' }, ok: true },
+      { rule: { id: 'left_elbow' }, ok: true },
+      { rule: { id: 'right_elbow' }, ok: true }
+    ];
+
+    const statusMap = getConnectorStatusMap(pose, ruleResults);
+    assert.equal(statusMap.failedEdges.size, 0);
+    assert.ok(statusMap.conformingEdges.has('11-13'));
+    assert.ok(statusMap.conformingEdges.has('13-15'));
+    assert.ok(statusMap.conformingEdges.has('12-14'));
+    assert.ok(statusMap.conformingEdges.has('14-16'));
+    assert.equal(statusMap.conformingEdges.size, 4);
+    assert.equal(statusMap.allMonitoredEdges.size, 4);
+  });
+
+  await t.test('getConnectorStatusMap: Failed rules mark edges as failed and remove them from conforming', () => {
+    const pose = poses.t_pose;
+    const ruleResults = [
+      { rule: { id: 'left_arm' }, ok: false }, // [11, 13], [13, 15] failed
+      { rule: { id: 'right_arm' }, ok: true }  // [12, 14], [14, 16] conforming
+    ];
+
+    const statusMap = getConnectorStatusMap(pose, ruleResults);
+    assert.ok(statusMap.failedEdges.has('11-13'));
+    assert.ok(statusMap.failedEdges.has('13-15'));
+    assert.ok(!statusMap.conformingEdges.has('11-13'));
+    assert.ok(!statusMap.conformingEdges.has('13-15'));
+
+    assert.ok(!statusMap.failedEdges.has('12-14'));
+    assert.ok(!statusMap.failedEdges.has('14-16'));
+    assert.ok(statusMap.conformingEdges.has('12-14'));
+    assert.ok(statusMap.conformingEdges.has('14-16'));
+  });
+
+  await t.test('getConnectorStatusMap: Failure precedence on shared limb connectors', () => {
+    const pose = poses.kae_kiat_forward;
+    // Suppose left_arm (maps to 11-13) passed, but left_elbow (maps to 11-13 and 13-15) failed
+    const ruleResults = [
+      { rule: { id: 'left_arm' }, ok: true },
+      { rule: { id: 'left_elbow' }, ok: false }
+    ];
+
+    const statusMap = getConnectorStatusMap(pose, ruleResults);
+    // 11-13 was both passing candidate and failed; failed MUST take precedence
+    assert.ok(statusMap.failedEdges.has('11-13'), '11-13 must be in failedEdges');
+    assert.ok(statusMap.failedEdges.has('13-15'), '13-15 must be in failedEdges');
+    assert.ok(!statusMap.conformingEdges.has('11-13'), '11-13 must NOT be in conformingEdges due to failure precedence');
+    assert.equal(statusMap.conformingEdges.size, 0);
+  });
+
+  await t.test('getConnectorStatusMap: Handles null/undefined/empty gracefully', () => {
+    const res1 = getConnectorStatusMap(null, null);
+    assert.equal(res1.failedEdges.size, 0);
+    assert.equal(res1.conformingEdges.size, 0);
+    assert.equal(res1.allMonitoredEdges.size, 0);
+
+    const res2 = getConnectorStatusMap(poses.t_pose, []);
+    assert.equal(res2.failedEdges.size, 0);
+    assert.equal(res2.conformingEdges.size, 0);
+  });
+
+  await t.test('renderSkeletonConnectors: Canvas rendering partitioned by failure, conforming, and unmonitored', () => {
+    const pose = poses.t_pose;
+    const drawnCalls = [];
+    const mockCtx = {
+      canvas: { width: 640, height: 480 },
+      save() {},
+      restore() {},
+      beginPath() {},
+      moveTo() {},
+      lineTo() {},
+      stroke() {}
+    };
+
+    // Mock drawConnectors global
+    global.drawConnectors = (ctx, landmarks, connections, options) => {
+      drawnCalls.push({ connections, options });
+    };
+
+    try {
+      const landmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 1.0 }));
+      const evalResult = {
+        allCorrect: false,
+        feedbacks: ['ยกแขนซ้าย'],
+        results: [
+          { rule: { id: 'left_arm' }, ok: false }, // fails [11, 13], [13, 15]
+          { rule: { id: 'right_arm' }, ok: true }  // passes [12, 14], [14, 16]
+        ]
+      };
+
+      renderSkeletonConnectors(mockCtx, landmarks, evalResult, pose);
+
+      assert.equal(drawnCalls.length, 3, 'Should draw 3 distinct groups: unmonitored, conforming, failed');
+
+      // Unmonitored group (sky blue #38bdf8, lw 3)
+      const unmonitoredCall = drawnCalls.find(c => c.options.color === '#38bdf8');
+      assert.ok(unmonitoredCall, 'Must draw unmonitored connections in #38bdf8');
+      assert.equal(unmonitoredCall.options.lineWidth, 3);
+      assert.ok(!unmonitoredCall.connections.some(([a, b]) => edgeKey(a, b) === '11-13'));
+      assert.ok(!unmonitoredCall.connections.some(([a, b]) => edgeKey(a, b) === '12-14'));
+
+      // Conforming group (emerald green #10b981, lw 3)
+      const conformingCall = drawnCalls.find(c => c.options.color === '#10b981');
+      assert.ok(conformingCall, 'Must draw conforming connections in #10b981');
+      assert.equal(conformingCall.options.lineWidth, 3);
+      assert.ok(conformingCall.connections.some(([a, b]) => edgeKey(a, b) === '12-14'));
+      assert.ok(conformingCall.connections.some(([a, b]) => edgeKey(a, b) === '14-16'));
+
+      // Failed group (bright red #ef4444, lw 5)
+      const failedCall = drawnCalls.find(c => c.options.color === '#ef4444');
+      assert.ok(failedCall, 'Must draw failed connections in #ef4444');
+      assert.equal(failedCall.options.lineWidth, 5);
+      assert.ok(failedCall.connections.some(([a, b]) => edgeKey(a, b) === '11-13'));
+      assert.ok(failedCall.connections.some(([a, b]) => edgeKey(a, b) === '13-15'));
+    } finally {
+      // Cleanup global mock
+      delete global.drawConnectors;
+    }
+  });
+
+  await t.test('renderSkeletonConnectors: Canvas 2D fallback when drawConnectors is undefined', () => {
+    const pose = poses.kae_kiat_forward;
+    const strokes = [];
+    const mockCtx = {
+      canvas: { width: 640, height: 480 },
+      strokeStyle: null,
+      lineWidth: 0,
+      lineCap: null,
+      save() {},
+      restore() {},
+      beginPath() {},
+      moveTo() {},
+      lineTo() {},
+      stroke() {
+        strokes.push({ strokeStyle: this.strokeStyle, lineWidth: this.lineWidth });
+      }
+    };
+
+    assert.equal(typeof global.drawConnectors, 'undefined');
+
+    const landmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 1.0 }));
+    const evalResult = {
+      allCorrect: false,
+      feedbacks: ['ข้อศอกซ้ายงอ'],
+      results: [
+        { rule: { id: 'left_arm' }, ok: true },
+        { rule: { id: 'right_arm' }, ok: true },
+        { rule: { id: 'left_elbow' }, ok: false }, // fails
+        { rule: { id: 'right_elbow' }, ok: true }
+      ]
+    };
+
+    renderSkeletonConnectors(mockCtx, landmarks, evalResult, pose);
+
+    assert.ok(strokes.length > 0, 'Canvas 2D strokes should be executed');
+    const redStrokes = strokes.filter(s => s.strokeStyle === '#ef4444' && s.lineWidth === 5);
+    const greenStrokes = strokes.filter(s => s.strokeStyle === '#10b981' && s.lineWidth === 3);
+    const blueStrokes = strokes.filter(s => s.strokeStyle === '#38bdf8' && s.lineWidth === 3);
+
+    assert.ok(redStrokes.length > 0, 'Should have red strokes for failed limb connectors');
+    assert.ok(greenStrokes.length > 0, 'Should have green strokes for conforming connectors');
+    assert.ok(blueStrokes.length > 0, 'Should have blue strokes for unmonitored connectors');
+  });
+});
+
+test('7. Authentic Thai Health Context & Cautions Integrity (R3)', async (t) => {
+  await t.test('All 8 poses contain a valid health_context object', () => {
+    const keys = Object.keys(poses);
+    assert.equal(keys.length, 8, 'Must validate exactly 8 poses');
+    for (const [key, pose] of Object.entries(poses)) {
+      assert.ok(pose.health_context, `Pose [${key}] must have health_context`);
+      assert.equal(typeof pose.health_context, 'object', `Pose [${key}].health_context must be an object`);
+      assert.notEqual(pose.health_context, null, `Pose [${key}].health_context must not be null`);
+    }
+  });
+
+  for (const [key, pose] of Object.entries(poses)) {
+    await t.test(`Validate health context for pose [${key}]`, () => {
+      const hc = pose.health_context;
+      assert.ok(hc, `Pose [${key}] must have health_context`);
+
+      // Benefits
+      assert.ok(Array.isArray(hc.benefits), `${key}.health_context.benefits must be an array`);
+      assert.ok(hc.benefits.length >= 1, `${key} must have at least 1 health benefit`);
+      for (const benefit of hc.benefits) {
+        assert.equal(typeof benefit, 'string', `${key} benefit must be a string`);
+        assert.ok(benefit.trim().length > 0, `Benefit in ${key} cannot be empty`);
+        assert.ok(/[\u0E00-\u0E7F]/.test(benefit), `Benefit in ${key} must contain Thai text`);
+      }
+
+      // Categorized Cautions
+      const cautions = hc.cautions;
+      assert.ok(cautions, `${key} must have cautions object`);
+      assert.equal(typeof cautions, 'object', `${key}.cautions must be an object`);
+
+      // Elderly caution
+      assert.equal(typeof cautions.elderly, 'string', `${key} elderly caution must be a string`);
+      assert.ok(cautions.elderly.trim().length > 0, `${key} elderly caution cannot be empty`);
+      assert.ok(/[\u0E00-\u0E7F]/.test(cautions.elderly), `${key} elderly caution must contain Thai text`);
+
+      // Pregnant caution
+      assert.equal(typeof cautions.pregnant, 'string', `${key} pregnant caution must be a string`);
+      assert.ok(cautions.pregnant.trim().length > 0, `${key} pregnant caution cannot be empty`);
+      assert.ok(/[\u0E00-\u0E7F]/.test(cautions.pregnant), `${key} pregnant caution must contain Thai text`);
+
+      // General caution
+      assert.equal(typeof cautions.general, 'string', `${key} general caution must be a string`);
+      assert.ok(cautions.general.trim().length > 0, `${key} general caution cannot be empty`);
+      assert.ok(/[\u0E00-\u0E7F]/.test(cautions.general), `${key} general caution must contain Thai text`);
     });
   }
 });

@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg-grad-prep" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#090d16" />
+    </linearGradient>
+    <linearGradient id="ruesi-gold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fcd34d" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+    <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background Card -->
+  <rect width="400" height="400" rx="16" fill="url(#bg-grad-prep)" stroke="#334155" stroke-width="2" />
+
+  <!-- Thai Traditional Lotus Mandala & Aura Halo -->
+  <circle cx="200" cy="205" r="160" fill="none" stroke="rgba(56, 189, 248, 0.08)" stroke-width="1.5" stroke-dasharray="4,6" />
+  <circle cx="200" cy="205" r="130" fill="none" stroke="rgba(245, 158, 11, 0.12)" stroke-width="1.5" />
+  <circle cx="200" cy="115" r="48" fill="none" stroke="rgba(245, 158, 11, 0.22)" stroke-width="1.2" />
+
+  <!-- Title Badge -->
+  <rect x="35" y="16" width="330" height="30" rx="6" fill="rgba(15, 23, 42, 0.85)" stroke="#38bdf8" stroke-width="1" />
+  <text x="200" y="36" fill="#38bdf8" font-size="12.5" font-family="-apple-system, sans-serif" font-weight="700" text-anchor="middle">ท่าแก้เกียจ — ท่าเตรียม (ประสานมือระดับอก)</text>
+
+  <!-- Meditation Cushion / Platform -->
+  <ellipse cx="200" cy="345" rx="130" ry="24" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+  <ellipse cx="200" cy="342" rx="115" ry="18" fill="rgba(245, 158, 11, 0.15)" stroke="#d97706" stroke-width="1" />
+
+  <!-- Stylized Hermit Silhouette (Cross-legged Seated / ขัดสมาธิ) -->
+  <g id="figure-silhouette" opacity="0.95">
+    <!-- Folded Legs / Khad Samathi -->
+    <!-- Left Knee & Leg -->
+    <path d="M140,265 C100,285 95,335 150,340 C190,345 200,310 200,310 Z" fill="#d97706" opacity="0.9" />
+    <!-- Right Knee & Leg -->
+    <path d="M260,265 C300,285 305,335 250,340 C210,345 200,310 200,310 Z" fill="#d97706" opacity="0.9" />
+    <path d="M120,315 Q200,345 280,315 Q200,325 120,315 Z" fill="#b45309" />
+
+    <!-- Torso -->
+    <path d="M168,160 Q164,220 178,275 L222,275 Q236,220 232,160 Z" fill="url(#ruesi-gold)" />
+    <!-- Hermit Cloth Sash (สไบเฉียง) -->
+    <path d="M172,162 Q190,215 220,275 L210,275 Q184,215 168,168 Z" fill="#b45309" opacity="0.9" />
+    <!-- Bead Necklace (ประคำ) -->
+    <path d="M188,165 Q200,205 212,165" fill="none" stroke="#fcd34d" stroke-width="2" stroke-dasharray="3,3" />
+
+    <!-- Head & Ascetic Chada Crown -->
+    <path d="M194,142 L194,160 L206,160 L206,142 Z" fill="#f59e0b" />
+    <ellipse cx="200" cy="120" rx="16" ry="19" fill="url(#ruesi-gold)" />
+    <!-- Beard -->
+    <path d="M192,126 Q200,150 208,126 Q200,138 192,126 Z" fill="#92400e" />
+    <!-- Chada -->
+    <path d="M190,105 Q200,68 210,105 Z" fill="#d97706" stroke="#fcd34d" stroke-width="1.5" />
+    <ellipse cx="200" cy="105" rx="13" ry="4" fill="#b45309" />
+    <circle cx="200" cy="68" r="4" fill="#fcd34d" />
+
+    <!-- Bent Arms Clasping Hands at Chest Level -->
+    <!-- Left Arm & Forearm -->
+    <path d="M170,165 L132,198 L142,204 L180,172 Z" fill="url(#ruesi-gold)" />
+    <path d="M132,198 L192,194 L192,204 L138,206 Z" fill="url(#ruesi-gold)" />
+    <!-- Right Arm & Forearm -->
+    <path d="M230,165 L268,198 L258,204 L220,172 Z" fill="url(#ruesi-gold)" />
+    <path d="M268,198 L208,194 L208,204 L262,206 Z" fill="url(#ruesi-gold)" />
+
+    <!-- Clasped Hands at Chest Level -->
+    <ellipse cx="200" cy="199" rx="12" ry="8" fill="#fcd34d" stroke="#b45309" stroke-width="1" />
+  </g>
+
+  <!-- MediaPipe Skeleton Vector Overlay (Elbows ~60°, Arm elevation ~45°) -->
+  <g filter="url(#neon-glow)" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Hips (23 -> 24) -->
+    <line x1="178" y1="275" x2="222" y2="275" stroke="#10b981" stroke-width="3" />
+    <!-- Spine -->
+    <line x1="200" y1="168" x2="200" y2="275" stroke="#10b981" stroke-width="2.5" stroke-dasharray="2,3" opacity="0.6" />
+    <!-- Left Hip to Shoulder (23 -> 11) -->
+    <line x1="178" y1="275" x2="170" y2="168" stroke="#10b981" stroke-width="3.5" />
+    <!-- Right Hip to Shoulder (24 -> 12) -->
+    <line x1="222" y1="275" x2="230" y2="168" stroke="#10b981" stroke-width="3.5" />
+
+    <!-- Left Upper Arm: 11 -> 13 (Elbow bent outward at ~45° elevation) -->
+    <line x1="170" y1="168" x2="135" y2="200" stroke="#38bdf8" stroke-width="4.5" />
+    <!-- Left Forearm: 13 -> 15 (Wrist at chest center, elbow angle ~60°) -->
+    <line x1="135" y1="200" x2="192" y2="199" stroke="#38bdf8" stroke-width="4.5" />
+
+    <!-- Right Upper Arm: 12 -> 14 -->
+    <line x1="230" y1="168" x2="265" y2="200" stroke="#38bdf8" stroke-width="4.5" />
+    <!-- Right Forearm: 14 -> 16 -->
+    <line x1="265" y1="200" x2="208" y2="199" stroke="#38bdf8" stroke-width="4.5" />
+  </g>
+
+  <!-- Angle Indicator Arcs -->
+  <!-- Left Elbow Arc (~60°) -->
+  <path d="M148,188 A16,16 0 0,1 154,200" fill="none" stroke="#fcd34d" stroke-width="2" />
+  <rect x="76" y="190" width="52" height="18" rx="4" fill="#0f172a" stroke="#fcd34d" stroke-width="1" />
+  <text x="102" y="203" fill="#fcd34d" font-size="10" font-family="monospace" font-weight="700" text-anchor="middle">ศอก 60°</text>
+
+  <!-- Right Elbow Arc (~60°) -->
+  <path d="M252,188 A16,16 0 0,0 246,200" fill="none" stroke="#fcd34d" stroke-width="2" />
+  <rect x="272" y="190" width="52" height="18" rx="4" fill="#0f172a" stroke="#fcd34d" stroke-width="1" />
+  <text x="298" y="203" fill="#fcd34d" font-size="10" font-family="monospace" font-weight="700" text-anchor="middle">ศอก 60°</text>
+
+  <!-- Landmark Nodes -->
+  <!-- Shoulders (11, 12) -->
+  <circle cx="170" cy="168" r="5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="230" cy="168" r="5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+  <!-- Elbows (13, 14) -->
+  <circle cx="135" cy="200" r="5.5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="265" cy="200" r="5.5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+  <!-- Wrists / Clasped Hands (15, 16) -->
+  <circle cx="192" cy="199" r="5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="208" cy="199" r="5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
+  <!-- Hips (23, 24) -->
+  <circle cx="178" cy="275" r="4.5" fill="#10b981" stroke="#ffffff" stroke-width="1" />
+  <circle cx="222" cy="275" r="4.5" fill="#10b981" stroke="#ffffff" stroke-width="1" />
+
+  <!-- Description Footer -->
+  <rect x="30" y="368" width="340" height="22" rx="4" fill="rgba(15, 23, 42, 0.9)" />
+  <text x="200" y="383" fill="#cbd5e1" font-size="11" font-family="-apple-system, sans-serif" text-anchor="middle">ประสานมือระดับอก ศอกงอสบายๆ 40°-85° ลำตัวตั้งตรง</text>
+</svg>

@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg-grad-left" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#090d16" />
+    </linearGradient>
+    <linearGradient id="ruesi-gold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fcd34d" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+    <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background Card -->
+  <rect width="400" height="400" rx="16" fill="url(#bg-grad-left)" stroke="#334155" stroke-width="2" />
+
+  <!-- Traditional Thai Halo -->
+  <circle cx="200" cy="205" r="160" fill="none" stroke="rgba(56, 189, 248, 0.08)" stroke-width="1.5" stroke-dasharray="4,6" />
+  <circle cx="200" cy="205" r="130" fill="none" stroke="rgba(245, 158, 11, 0.12)" stroke-width="1.5" />
+  <circle cx="190" cy="115" r="48" fill="none" stroke="rgba(245, 158, 11, 0.22)" stroke-width="1.2" />
+
+  <!-- Title Badge -->
+  <rect x="35" y="16" width="330" height="30" rx="6" fill="rgba(15, 23, 42, 0.85)" stroke="#38bdf8" stroke-width="1" />
+  <text x="200" y="36" fill="#38bdf8" font-size="12.5" font-family="-apple-system, sans-serif" font-weight="700" text-anchor="middle">ท่าแก้เกียจ — ดัดไปทางซ้าย (เหยียดแขนระดับอก)</text>
+
+  <!-- Meditation Cushion / Platform -->
+  <ellipse cx="200" cy="345" rx="130" ry="24" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+  <ellipse cx="200" cy="342" rx="115" ry="18" fill="rgba(245, 158, 11, 0.15)" stroke="#d97706" stroke-width="1" />
+
+  <!-- Stylized Hermit Silhouette (Khad Samathi, Torso & Arms Twisted to the Left) -->
+  <g id="figure-silhouette" opacity="0.95">
+    <!-- Crossed Legs -->
+    <path d="M140,265 C100,285 95,335 150,340 C190,345 200,310 200,310 Z" fill="#d97706" opacity="0.9" />
+    <path d="M260,265 C300,285 305,335 250,340 C210,345 200,310 200,310 Z" fill="#d97706" opacity="0.9" />
+    <path d="M120,315 Q200,345 280,315 Q200,325 120,315 Z" fill="#b45309" />
+
+    <!-- Torso (Gently twisted towards left) -->
+    <path d="M165,162 Q160,220 178,275 L222,275 Q232,220 224,162 Z" fill="url(#ruesi-gold)" />
+    <!-- Cloth Sash -->
+    <path d="M168,164 Q186,218 218,275 L208,275 Q180,218 164,168 Z" fill="#b45309" opacity="0.9" />
+
+    <!-- Head & Chada (Angled slightly towards left) -->
+    <path d="M188,142 L188,160 L200,160 L200,142 Z" fill="#f59e0b" />
+    <ellipse cx="194" cy="120" rx="15" ry="19" fill="url(#ruesi-gold)" />
+    <path d="M186,126 Q192,150 202,126 Q194,138 186,126 Z" fill="#92400e" />
+    <path d="M184,105 Q194,68 204,105 Z" fill="#d97706" stroke="#fcd34d" stroke-width="1.5" />
+    <ellipse cx="194" cy="105" rx="12" ry="4" fill="#b45309" />
+    <circle cx="194" cy="68" r="4" fill="#fcd34d" />
+
+    <!-- Both Arms Extended Across to the Left (Viewer's Left) -->
+    <!-- Right Arm reaching across the chest to left -->
+    <path d="M225,166 L115,166 L115,178 L225,178 Z" fill="url(#ruesi-gold)" />
+    <!-- Left Arm extending out to left -->
+    <path d="M165,166 L65,170 L65,182 L165,178 Z" fill="url(#ruesi-gold)" />
+
+    <!-- Clasped Palms Pushed Outward to the Left -->
+    <ellipse cx="65" cy="176" rx="12" ry="18" fill="#fcd34d" stroke="#b45309" stroke-width="1.5" />
+    <path d="M65,165 Q58,176 65,187" fill="none" stroke="#92400e" stroke-width="1.5" />
+  </g>
+
+  <!-- MediaPipe Skeleton Vector Overlay -->
+  <g filter="url(#neon-glow)" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Hips (23 -> 24) -->
+    <line x1="178" y1="275" x2="222" y2="275" stroke="#10b981" stroke-width="3" />
+    <!-- Spine -->
+    <line x1="195" y1="166" x2="200" y2="275" stroke="#10b981" stroke-width="2.5" stroke-dasharray="2,3" opacity="0.6" />
+    <!-- Left Hip to Shoulder (23 -> 11) -->
+    <line x1="178" y1="275" x2="165" y2="168" stroke="#10b981" stroke-width="3.5" />
+    <!-- Right Hip to Shoulder (24 -> 12) -->
+    <line x1="222" y1="275" x2="225" y2="168" stroke="#10b981" stroke-width="3.5" />
+
+    <!-- Left Upper Arm: 11 -> 13 (Reaching Left) -->
+    <line x1="165" y1="168" x2="115" y2="173" stroke="#38bdf8" stroke-width="4.5" />
+    <!-- Left Forearm: 13 -> 15 (Straight to Left) -->
+    <line x1="115" y1="173" x2="65" y2="176" stroke="#38bdf8" stroke-width="4.5" />
+
+    <!-- Right Upper Arm: 12 -> 14 (Reaching Across to Left) -->
+    <line x1="225" y1="168" x2="155" y2="173" stroke="#38bdf8" stroke-width="4.5" />
+    <!-- Right Forearm: 14 -> 16 -->
+    <line x1="155" y1="173" x2="75" y2="176" stroke="#38bdf8" stroke-width="4.5" />
+  </g>
+
+  <!-- Angle Indicator Badges & Push Arrow -->
+  <!-- Left Extension Direction Arrow -->
+  <path d="M90,148 L65,148 M75,142 L65,148 L75,154" stroke="#34d399" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Angle Badges -->
+  <rect x="18" y="196" width="94" height="22" rx="4" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2" />
+  <text x="65" y="211" fill="#38bdf8" font-size="10.5" font-family="monospace" font-weight="700" text-anchor="middle">เหยียดซ้าย 165°</text>
+
+  <rect x="235" y="174" width="85" height="22" rx="4" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2" />
+  <text x="277" y="189" fill="#38bdf8" font-size="10.5" font-family="monospace" font-weight="700" text-anchor="middle">ระดับอก 90°</text>
+
+  <!-- Landmark Nodes -->
+  <circle cx="165" cy="168" r="5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="225" cy="168" r="5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="115" cy="173" r="5.5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="155" cy="173" r="5.5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="65" cy="176" r="5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="75" cy="176" r="5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="178" cy="275" r="4.5" fill="#10b981" stroke="#ffffff" stroke-width="1" />
+  <circle cx="222" cy="275" r="4.5" fill="#10b981" stroke="#ffffff" stroke-width="1" />
+
+  <!-- Description Footer -->
+  <rect x="30" y="368" width="340" height="22" rx="4" fill="rgba(15, 23, 42, 0.9)" />
+  <text x="200" y="383" fill="#cbd5e1" font-size="11" font-family="-apple-system, sans-serif" text-anchor="middle">ประสานมือผลักเหยียดไปทางซ้าย แขนเหยียดตึงระดับอก</text>
+</svg>

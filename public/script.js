@@ -1,6 +1,19 @@
+// ─── Evaluator Dependency ─────────────────────────────────────────────────────
+let poseEvaluatorModule = (typeof PoseEvaluator !== 'undefined') ? PoseEvaluator : null;
+if (!poseEvaluatorModule && typeof require === 'function') {
+  try {
+    poseEvaluatorModule = require('./pose-evaluator.js');
+  } catch (e) {}
+}
+
 // ─── State ────────────────────────────────────────────────────────────────────
 let selectedPoseKey = null;
 let posesData = {};
+if (typeof require === 'function') {
+  try {
+    posesData = require('./poses.json');
+  } catch (e) {}
+}
 let ttsEnabled = false;
 let lastSpokenAt = 0;
 const TTS_DEBOUNCE_MS = 3000;
@@ -32,6 +45,17 @@ const timerTargetEl      = typeof document !== 'undefined' ? document.getElement
 const timerProgressBarEl = typeof document !== 'undefined' ? document.getElementById('timer-progress-bar') : null;
 const durationInputEl    = typeof document !== 'undefined' ? document.getElementById('duration-input') : null;
 const autoAdvanceToggle  = typeof document !== 'undefined' ? document.getElementById('auto-advance-toggle') : null;
+const healthInfoCardEl     = typeof document !== 'undefined' ? document.getElementById('health-info-card') : null;
+const healthBenefitsListEl = typeof document !== 'undefined' ? document.getElementById('health-benefits-list') : null;
+const cautionElderlyEl     = typeof document !== 'undefined' ? document.getElementById('caution-elderly-text') : null;
+const cautionPregnantEl    = typeof document !== 'undefined' ? document.getElementById('caution-pregnant-text') : null;
+const cautionGeneralEl     = typeof document !== 'undefined' ? document.getElementById('caution-general-text') : null;
+const poseRefCardEl        = typeof document !== 'undefined' ? (document.getElementById('pose-reference-card') || document.querySelector('.pose-reference-card')) : null;
+const poseRefImgEl         = typeof document !== 'undefined' ? (document.getElementById('reference-pose-img') || document.getElementById('pose-ref-img')) : null;
+const poseRefCaptionEl     = typeof document !== 'undefined' ? document.getElementById('pose-ref-caption') : null;
+const poseRefHudEl         = typeof document !== 'undefined' ? (document.getElementById('pose-guide-pip') || document.getElementById('pose-ref-hud')) : null;
+const refHudImgEl          = typeof document !== 'undefined' ? (document.getElementById('pose-guide-img') || document.getElementById('ref-hud-img')) : null;
+const poseGuidePipToggleEl = typeof document !== 'undefined' ? document.getElementById('pose-guide-pip-toggle') : null;
 
 // ─── Load Poses ───────────────────────────────────────────────────────────────
 if (typeof fetch === 'function') {
@@ -40,6 +64,8 @@ if (typeof fetch === 'function') {
     .then(data => {
       posesData = data;
       renderPoseButtons();
+      updateHealthInfoUI(selectedPoseKey ? posesData[selectedPoseKey] : null);
+      updateVisualReferenceUI(selectedPoseKey ? posesData[selectedPoseKey] : null);
     })
     .catch(() => {
       if (poseListEl) poseListEl.innerHTML = '<p style="color:#fca5a5">โหลด poses.json ไม่ได้</p>';
@@ -58,12 +84,108 @@ function renderPoseButtons() {
       btn.classList.add('completed');
     }
     btn.innerHTML = `
-      <span class="pose-name">${pose.name}</span>
-      <span class="pose-desc">${pose.description}</span>
+      <span class="pose-name">${escapeHtml(pose.name)}</span>
+      <span class="pose-desc">${escapeHtml(pose.description)}</span>
     `;
     btn.addEventListener('click', () => selectPose(key, btn));
     poseListEl.appendChild(btn);
   });
+}
+
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function updateVisualReferenceUI(pose) {
+  const fallbackSrc = 'images/poses/placeholder.svg';
+  const targetSrc = (pose && pose.image) ? pose.image : fallbackSrc;
+  const targetAlt = (pose && pose.image_alt) ? pose.image_alt : (pose && pose.name ? `ภาพ ${pose.name}` : 'ภาพท่าทางต้นแบบ');
+
+  const refImgs = [
+    typeof document !== 'undefined' ? document.getElementById('reference-pose-img') : null,
+    typeof document !== 'undefined' ? document.getElementById('pose-ref-img') : null,
+    typeof document !== 'undefined' ? document.getElementById('pose-guide-img') : null,
+    typeof document !== 'undefined' ? document.getElementById('ref-hud-img') : null,
+    poseRefImgEl,
+    refHudImgEl
+  ].filter(Boolean);
+
+  // Eliminate duplicates if any
+  const uniqueImgs = Array.from(new Set(refImgs));
+  uniqueImgs.forEach(img => {
+    img.src = targetSrc;
+    img.alt = targetAlt;
+    img.onerror = () => {
+      img.onerror = null;
+      img.src = fallbackSrc;
+    };
+  });
+
+  const refCaption = (typeof document !== 'undefined' && document.getElementById('pose-ref-caption')) || poseRefCaptionEl;
+  if (refCaption) {
+    if (pose && pose.name) {
+      refCaption.textContent = pose.name.includes('—') ? pose.name.split('—')[1].trim() : pose.name;
+    } else {
+      refCaption.textContent = 'รอเลือกท่า...';
+    }
+  }
+
+  const refTitle = typeof document !== 'undefined' ? document.getElementById('reference-pose-title') : null;
+  if (refTitle) {
+    refTitle.textContent = pose ? pose.name : 'เลือกท่าทางเพื่อดูภาพตัวอย่าง';
+  }
+
+  const refDesc = typeof document !== 'undefined' ? document.getElementById('reference-pose-desc') : null;
+  if (refDesc) {
+    refDesc.textContent = pose ? pose.description : 'แสดงสรีระและมุมเป้าหมายตามแบบแผนฤๅษีดัดตน';
+  }
+
+  const guideLabel = typeof document !== 'undefined' ? document.getElementById('pose-guide-label') : null;
+  if (guideLabel && pose) {
+    guideLabel.textContent = '🧘 ท่าต้นแบบ';
+  }
+}
+
+function updateHealthInfoUI(pose) {
+  const benefitsListEl = (typeof document !== 'undefined' && document.getElementById('health-benefits-list')) || healthBenefitsListEl;
+  const cautionElderly = (typeof document !== 'undefined' && document.getElementById('caution-elderly-text')) || cautionElderlyEl;
+  const cautionPregnant = (typeof document !== 'undefined' && document.getElementById('caution-pregnant-text')) || cautionPregnantEl;
+  const cautionGeneral = (typeof document !== 'undefined' && document.getElementById('caution-general-text')) || cautionGeneralEl;
+
+  if (!pose || !pose.health_context) {
+    if (benefitsListEl) {
+      benefitsListEl.innerHTML = pose ? '<li>ไม่มีข้อมูลทางสุขภาพ</li>' : '<li>เลือกท่าทางเพื่อดูสรรพคุณทางสุขภาพ</li>';
+    }
+    if (cautionElderly) cautionElderly.textContent = '-';
+    if (cautionPregnant) cautionPregnant.textContent = '-';
+    if (cautionGeneral) cautionGeneral.textContent = '-';
+    return;
+  }
+
+  const { benefits, cautions } = pose.health_context;
+
+  if (benefitsListEl) {
+    if (Array.isArray(benefits) && benefits.length > 0) {
+      benefitsListEl.innerHTML = benefits.map(b => `<li>${escapeHtml(b)}</li>`).join('');
+    } else {
+      benefitsListEl.innerHTML = '<li>ไม่มีข้อมูลทางสุขภาพ</li>';
+    }
+  }
+
+  if (cautionElderly) {
+    cautionElderly.textContent = (cautions && typeof cautions.elderly === 'string') ? cautions.elderly : '-';
+  }
+  if (cautionPregnant) {
+    cautionPregnant.textContent = (cautions && typeof cautions.pregnant === 'string') ? cautions.pregnant : '-';
+  }
+  if (cautionGeneral) {
+    cautionGeneral.textContent = (cautions && typeof cautions.general === 'string') ? cautions.general : '-';
+  }
 }
 
 function selectPose(key, btn) {
@@ -73,24 +195,28 @@ function selectPose(key, btn) {
   }
   resetHoldTimer();
   isCompleted = false;
-  selectedPoseKey = key;
+  selectedPoseKey = (key && typeof key === 'object') ? (key.id || key.key || null) : key;
 
   if (typeof document !== 'undefined') {
     document.querySelectorAll('.pose-btn').forEach(b => b.classList.remove('active'));
     if (btn) {
       btn.classList.add('active');
-    } else {
-      const matchedBtn = document.querySelector(`.pose-btn[data-pose-key="${key}"]`);
+    } else if (selectedPoseKey) {
+      const matchedBtn = document.querySelector(`.pose-btn[data-pose-key="${selectedPoseKey}"]`);
       if (matchedBtn) matchedBtn.classList.add('active');
     }
   }
 
+  const activePose = (key && typeof key === 'object') ? key : (posesData ? posesData[key] : null);
+
   if (statusCardEl) statusCardEl.className = 'status-card waiting';
-  if (poseLabelEl) poseLabelEl.textContent = posesData[key] ? posesData[key].name : key;
+  if (poseLabelEl) poseLabelEl.textContent = activePose ? activePose.name : (selectedPoseKey || '');
   if (adviceEl) adviceEl.textContent = 'กำลังวิเคราะห์ท่าทาง...';
   if (angleOverlayEl) angleOverlayEl.innerHTML = '';
   if (angleListEl) angleListEl.innerHTML = '';
   updateTimerUI(0);
+  updateHealthInfoUI(activePose);
+  updateVisualReferenceUI(activePose);
 }
 
 // ─── Timer Functions (R1, R2, R3) ─────────────────────────────────────────────
@@ -129,6 +255,10 @@ function onPoseComplete() {
 
   // Auto-advance to next pose if setting is enabled (R2)
   if (autoAdvanceEnabled) {
+    if (autoAdvanceTimer) {
+      clearTimeout(autoAdvanceTimer);
+      autoAdvanceTimer = null;
+    }
     const keys = Object.keys(posesData);
     const currIdx = keys.indexOf(selectedPoseKey);
     if (currIdx !== -1 && keys.length > 1) {
@@ -170,6 +300,19 @@ if (autoAdvanceToggle) {
   });
 }
 
+// ─── PiP Reference Guide Toggle (R1) ──────────────────────────────────────────
+const pipToggleBtnEl = (typeof document !== 'undefined' && document.getElementById('pose-guide-pip-toggle')) || poseGuidePipToggleEl;
+const pipOverlayElement = (typeof document !== 'undefined' && (document.getElementById('pose-guide-pip') || document.getElementById('pose-ref-hud'))) || poseRefHudEl;
+
+if (pipToggleBtnEl && pipOverlayElement) {
+  pipToggleBtnEl.addEventListener('click', () => {
+    const isMinimized = pipOverlayElement.classList.toggle('minimized');
+    pipToggleBtnEl.textContent = isMinimized ? '+' : '−';
+    pipToggleBtnEl.title = isMinimized ? 'ขยายภาพต้นแบบ' : 'ย่อภาพต้นแบบ';
+    pipToggleBtnEl.setAttribute('aria-expanded', String(!isMinimized));
+  });
+}
+
 // ─── TTS ──────────────────────────────────────────────────────────────────────
 if (ttsBtn) {
   ttsBtn.addEventListener('click', () => {
@@ -183,10 +326,14 @@ function speak(text, bypassDebounce = false) {
   const now = Date.now();
   if (!bypassDebounce && (now - lastSpokenAt < TTS_DEBOUNCE_MS)) return;
   lastSpokenAt = now;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'th-TH';
-  window.speechSynthesis.speak(u);
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'th-TH';
+    window.speechSynthesis.speak(u);
+  } catch (err) {
+    console.warn('Speech synthesis error:', err);
+  }
 }
 
 // ─── Angle Calculation ────────────────────────────────────────────────────────
@@ -206,12 +353,13 @@ function calcAngle(A, B, C) {
 // ─── Pose Evaluation ──────────────────────────────────────────────────────────
 function evaluatePose(landmarks) {
   const pose = posesData[selectedPoseKey];
-  if (!pose) return;
+  if (!pose) return { allCorrect: false, feedbacks: [], results: [] };
 
   let allCorrect = true;
   const overlayChips = [];
   const listRows = [];
   const feedbacks = [];
+  const results = [];
 
   pose.rules.forEach(rule => {
     const res = (typeof PoseEvaluator !== 'undefined' && PoseEvaluator.evaluateRule)
@@ -227,6 +375,8 @@ function evaluatePose(landmarks) {
           const ok = angle >= rule.min && angle <= rule.max;
           return { rule, ok, lowVis: false, angle, feedback: ok ? null : (angle < rule.min ? rule.feedback_low : rule.feedback_high) };
         })();
+
+    results.push(res);
 
     if (res.lowVis) {
       overlayChips.push(`<div class="chip low-vis">${rule.label}: ?°</div>`);
@@ -263,18 +413,20 @@ function evaluatePose(landmarks) {
       const elapsed = (now - holdStartTime) / 1000;
       updateTimerUI(elapsed);
 
-      if (elapsed >= targetHoldDuration) {
+      const effectiveDuration = Math.max(1, targetHoldDuration || 3);
+      if (elapsed >= effectiveDuration) {
         isCompleted = true;
         isHolding = false;
         onPoseComplete();
       } else {
-        const msg = `ท่าทางถูกต้อง! ค้างท่าไว้ ${targetHoldDuration} วินาที และหายใจเข้า-ออกช้าๆ`;
+        const msg = `ท่าทางถูกต้อง! ค้างท่าไว้ ${effectiveDuration} วินาที และหายใจเข้า-ออกช้าๆ`;
         if (adviceEl) adviceEl.textContent = msg;
         speak(msg);
       }
     } else {
       if (statusCardEl) statusCardEl.className = 'status-card correct completed';
-      updateTimerUI(targetHoldDuration);
+      const effectiveDuration = Math.max(1, targetHoldDuration || 3);
+      updateTimerUI(effectiveDuration);
     }
   } else {
     if (statusCardEl) statusCardEl.className = 'status-card incorrect';
@@ -285,6 +437,12 @@ function evaluatePose(landmarks) {
     if (adviceEl) adviceEl.textContent = msg;
     speak(msg);
   }
+
+  return {
+    allCorrect,
+    feedbacks,
+    results
+  };
 }
 
 // ─── MediaPipe Pose Setup ─────────────────────────────────────────────────────
@@ -319,12 +477,16 @@ if (typeof Pose !== 'undefined') {
     ctx.drawImage(results.image, 0, 0, canvasEl.width, canvasEl.height);
 
     if (results.poseLandmarks) {
-      // Draw skeleton
-      if (typeof drawConnectors !== 'undefined' && typeof POSE_CONNECTIONS !== 'undefined') {
-        drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {
-          color: '#38bdf8', lineWidth: 3
-        });
+      // Invert execution order: evaluate the pose before skeleton drawing
+      const activePose = selectedPoseKey ? posesData[selectedPoseKey] : null;
+      let evalResult = null;
+      if (selectedPoseKey) {
+        evalResult = evaluatePose(results.poseLandmarks);
       }
+
+      // Draw skeleton connectors with dynamic error highlighting
+      renderSkeletonConnectors(ctx, results.poseLandmarks, evalResult, activePose);
+
       if (typeof drawLandmarks !== 'undefined') {
         drawLandmarks(ctx, results.poseLandmarks, {
           color: '#f43f5e', lineWidth: 2, radius: 5
@@ -332,11 +494,6 @@ if (typeof Pose !== 'undefined') {
       }
 
       ctx.restore();
-
-      // Evaluate against selected pose rules
-      if (selectedPoseKey) {
-        evaluatePose(results.poseLandmarks);
-      }
     } else {
       ctx.restore();
       if (selectedPoseKey) {
@@ -349,6 +506,102 @@ if (typeof Pose !== 'undefined') {
       }
     }
   });
+}
+
+// ─── Skeleton Connector Rendering & Highlight Engine (R2) ─────────────────────
+// Standard MediaPipe POSE_CONNECTIONS index pairs
+const DEFAULT_POSE_CONNECTIONS = [
+  [0, 1], [1, 2], [2, 3], [3, 7], [0, 4], [4, 5], [5, 6], [6, 8], [9, 10],
+  [11, 12], [11, 13], [13, 15], [15, 17], [15, 19], [15, 21], [17, 19],
+  [12, 14], [14, 16], [16, 18], [16, 20], [16, 22], [18, 20],
+  [11, 23], [12, 24], [23, 24], [23, 25], [24, 26], [25, 27], [26, 28],
+  [27, 29], [28, 30], [29, 31], [30, 32], [27, 31], [28, 32]
+];
+
+/**
+ * Renders skeleton connector lines with real-time error highlighting.
+ * - Failed connectors: bright red (#ef4444, lineWidth 5)
+ * - Conforming connectors: emerald green (#10b981, lineWidth 3)
+ * - Unmonitored connectors: sky blue (#38bdf8, lineWidth 3)
+ *
+ * @param {CanvasRenderingContext2D} ctx - 2D canvas context
+ * @param {Array<Object>} landmarks - MediaPipe pose landmarks
+ * @param {Object|null} evalResult - Evaluation result from evaluatePose
+ * @param {Object|null} pose - Active pose definition
+ */
+function renderSkeletonConnectors(ctx, landmarks, evalResult, pose) {
+  if (!ctx || !landmarks) return;
+
+  const connections = (typeof POSE_CONNECTIONS !== 'undefined')
+    ? POSE_CONNECTIONS
+    : DEFAULT_POSE_CONNECTIONS;
+
+  const pe = (typeof PoseEvaluator !== 'undefined' ? PoseEvaluator : poseEvaluatorModule);
+  const statusMap = (pe && pe.getConnectorStatusMap)
+    ? pe.getConnectorStatusMap(pose, evalResult ? evalResult.results : null)
+    : { failedEdges: new Set(), conformingEdges: new Set(), allMonitoredEdges: new Set() };
+
+  const { failedEdges, conformingEdges } = statusMap;
+
+  const failed = [];
+  const conforming = [];
+  const unmonitored = [];
+
+  for (const conn of connections) {
+    const key = conn[0] < conn[1] ? `${conn[0]}-${conn[1]}` : `${conn[1]}-${conn[0]}`;
+    if (failedEdges.has(key)) {
+      failed.push(conn);
+    } else if (conformingEdges.has(key)) {
+      conforming.push(conn);
+    } else {
+      unmonitored.push(conn);
+    }
+  }
+
+  function drawGroup(group, color, lineWidth) {
+    if (!group || group.length === 0) return;
+    if (typeof drawConnectors !== 'undefined') {
+      drawConnectors(ctx, landmarks, group, { color, lineWidth });
+      return;
+    }
+
+    // Canvas 2D fallback line-drawing mechanism when drawConnectors is undefined
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round';
+    const w = (ctx && ctx.canvas) ? ctx.canvas.width : (typeof canvasEl !== 'undefined' && canvasEl ? canvasEl.width : 640);
+    const h = (ctx && ctx.canvas) ? ctx.canvas.height : (typeof canvasEl !== 'undefined' && canvasEl ? canvasEl.height : 480);
+
+    for (const [i, j] of group) {
+      const p1 = landmarks[i];
+      const p2 = landmarks[j];
+      if (!p1 || !p2) continue;
+      if ((p1.visibility !== undefined && p1.visibility < 0.5) ||
+          (p2.visibility !== undefined && p2.visibility < 0.5)) {
+        continue;
+      }
+      ctx.beginPath();
+      ctx.moveTo(p1.x * w, p1.y * h);
+      ctx.lineTo(p2.x * w, p2.y * h);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 1. Unmonitored lines (sky blue)
+  drawGroup(unmonitored, '#38bdf8', 3);
+
+  // 2. Conforming lines (emerald green)
+  drawGroup(conforming, '#10b981', 3);
+
+  // 3. Failed lines (bright red, thicker)
+  drawGroup(failed, '#ef4444', 5);
+}
+
+if (typeof window !== 'undefined') {
+  window.renderSkeletonConnectors = renderSkeletonConnectors;
+  window.DEFAULT_POSE_CONNECTIONS = DEFAULT_POSE_CONNECTIONS;
 }
 
 // ─── Camera ───────────────────────────────────────────────────────────────────
@@ -381,10 +634,15 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     calcAngle,
     evaluatePose,
+    renderSkeletonConnectors,
+    DEFAULT_POSE_CONNECTIONS,
     speak,
     selectPose,
     resetHoldTimer,
     updateTimerUI,
+    updateHealthInfoUI,
+    updateVisualReferenceUI,
+    escapeHtml,
     onPoseComplete,
     renderPoseButtons,
     getState: () => ({

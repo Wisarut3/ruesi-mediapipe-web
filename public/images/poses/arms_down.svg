@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg-grad-down" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#090d16" />
+    </linearGradient>
+    <linearGradient id="ruesi-gold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fcd34d" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+    <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background Card -->
+  <rect width="400" height="400" rx="16" fill="url(#bg-grad-down)" stroke="#334155" stroke-width="2" />
+
+  <!-- Thai Traditional Halo -->
+  <circle cx="200" cy="200" r="160" fill="none" stroke="rgba(56, 189, 248, 0.08)" stroke-width="1.5" stroke-dasharray="4,6" />
+  <circle cx="200" cy="200" r="130" fill="none" stroke="rgba(245, 158, 11, 0.12)" stroke-width="1.5" />
+  <circle cx="200" cy="95" r="45" fill="none" stroke="rgba(245, 158, 11, 0.2)" stroke-width="1" />
+
+  <!-- Title Badge -->
+  <rect x="50" y="16" width="300" height="30" rx="6" fill="rgba(15, 23, 42, 0.85)" stroke="#38bdf8" stroke-width="1" />
+  <text x="200" y="36" fill="#38bdf8" font-size="13" font-family="-apple-system, sans-serif" font-weight="700" text-anchor="middle">ท่าวางแขน — แขนลง (Calibrate 0°-35°)</text>
+
+  <!-- Ground Plane -->
+  <line x1="80" y1="365" x2="320" y2="365" stroke="#475569" stroke-width="2" stroke-linecap="round" />
+
+  <!-- Stylized Hermit Silhouette (Standing Arms Down) -->
+  <g id="figure-silhouette" opacity="0.95">
+    <!-- Legs / Dhoti wrap -->
+    <path d="M182,230 L175,355 L192,355 L196,255 L204,255 L208,355 L225,355 L218,230 Z" fill="#d97706" opacity="0.85" />
+    <ellipse cx="180" cy="358" rx="12" ry="5" fill="#b45309" />
+    <ellipse cx="220" cy="358" rx="12" ry="5" fill="#b45309" />
+
+    <!-- Torso -->
+    <path d="M172,130 Q168,180 180,230 L220,230 Q232,180 228,130 Z" fill="url(#ruesi-gold)" />
+    <!-- Cloth Sash -->
+    <path d="M176,130 Q192,185 220,230 L212,230 Q188,185 172,135 Z" fill="#b45309" opacity="0.9" />
+
+    <!-- Head & Crown -->
+    <path d="M194,115 L194,130 L206,130 L206,115 Z" fill="#f59e0b" />
+    <ellipse cx="200" cy="100" rx="15" ry="18" fill="url(#ruesi-gold)" />
+    <path d="M192,106 Q200,128 208,106 Q200,118 192,106 Z" fill="#92400e" />
+    <path d="M190,86 Q200,50 210,86 Z" fill="#d97706" stroke="#fcd34d" stroke-width="1.5" />
+    <ellipse cx="200" cy="86" rx="12" ry="4" fill="#b45309" />
+    <circle cx="200" cy="50" r="4" fill="#fcd34d" />
+
+    <!-- Arms Resting Down along side of torso -->
+    <!-- Left Arm -->
+    <path d="M173,135 L160,225 L169,226 L181,135 Z" fill="url(#ruesi-gold)" />
+    <ellipse cx="158" cy="235" rx="5.5" ry="8" fill="#fcd34d" />
+    <!-- Right Arm -->
+    <path d="M227,135 L240,225 L231,226 L219,135 Z" fill="url(#ruesi-gold)" />
+    <ellipse cx="242" cy="235" rx="5.5" ry="8" fill="#fcd34d" />
+  </g>
+
+  <!-- MediaPipe Landmark Connector Lines (Glowing Cyan/Green) -->
+  <g filter="url(#neon-glow)" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Spine Line -->
+    <line x1="200" y1="138" x2="200" y2="230" stroke="#10b981" stroke-width="3" stroke-dasharray="2,3" opacity="0.7" />
+    <!-- Hips (23 -> 24) -->
+    <line x1="182" y1="230" x2="218" y2="230" stroke="#10b981" stroke-width="3" />
+    <!-- Left Hip to Shoulder (23 -> 11) -->
+    <line x1="182" y1="230" x2="176" y2="140" stroke="#10b981" stroke-width="3.5" />
+    <!-- Right Hip to Shoulder (24 -> 12) -->
+    <line x1="218" y1="230" x2="224" y2="140" stroke="#10b981" stroke-width="3.5" />
+
+    <!-- Target Angle Vector: Left Arm (11 -> 13 -> 15) -->
+    <line x1="176" y1="140" x2="167" y2="188" stroke="#38bdf8" stroke-width="4.5" />
+    <line x1="167" y1="188" x2="158" y2="235" stroke="#38bdf8" stroke-width="4.5" />
+
+    <!-- Target Angle Vector: Right Arm (12 -> 14 -> 16) -->
+    <line x1="224" y1="140" x2="233" y2="188" stroke="#38bdf8" stroke-width="4.5" />
+    <line x1="233" y1="188" x2="242" y2="235" stroke="#38bdf8" stroke-width="4.5" />
+  </g>
+
+  <!-- Small Angle Indicator (15° Near Hips) -->
+  <path d="M182,190 A35,35 0 0,0 167,188" fill="none" stroke="#fcd34d" stroke-width="1.8" stroke-dasharray="2,2" />
+  <rect x="118" y="180" width="40" height="18" rx="4" fill="#0f172a" stroke="#fcd34d" stroke-width="1" />
+  <text x="138" y="193" fill="#fcd34d" font-size="10.5" font-family="monospace" font-weight="700" text-anchor="middle">&lt;35°</text>
+
+  <path d="M218,190 A35,35 0 0,1 233,188" fill="none" stroke="#fcd34d" stroke-width="1.8" stroke-dasharray="2,2" />
+  <rect x="242" y="180" width="40" height="18" rx="4" fill="#0f172a" stroke="#fcd34d" stroke-width="1" />
+  <text x="262" y="193" fill="#fcd34d" font-size="10.5" font-family="monospace" font-weight="700" text-anchor="middle">&lt;35°</text>
+
+  <!-- Joint Landmark Nodes -->
+  <circle cx="176" cy="140" r="5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="224" cy="140" r="5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="167" cy="188" r="5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="233" cy="188" r="5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="158" cy="235" r="5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="242" cy="235" r="5" fill="#10b981" stroke="#ffffff" stroke-width="1.5" />
+  <circle cx="182" cy="230" r="4.5" fill="#10b981" stroke="#ffffff" stroke-width="1" />
+  <circle cx="218" cy="230" r="4.5" fill="#10b981" stroke="#ffffff" stroke-width="1" />
+
+  <!-- Downward Relax Arrow -->
+  <path d="M142,205 L142,225 M138,219 L142,225 L146,219" stroke="#34d399" stroke-width="1.8" fill="none" stroke-linecap="round" />
+  <path d="M258,205 L258,225 M254,219 L258,225 L262,219" stroke="#34d399" stroke-width="1.8" fill="none" stroke-linecap="round" />
+
+  <!-- Description Footer -->
+  <rect x="30" y="368" width="340" height="22" rx="4" fill="rgba(15, 23, 42, 0.9)" />
+  <text x="200" y="383" fill="#cbd5e1" font-size="11" font-family="-apple-system, sans-serif" text-anchor="middle">ยืนตรง ปล่อยแขนแนบลำตัวตามสบาย เพื่อวัดค่าพื้นฐาน</text>
+</svg>

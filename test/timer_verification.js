@@ -643,3 +643,56 @@ test('7. Configurable Timer Duration Setting UI & Reactivity (R3)', async (t) =>
     Date.now = originalDateNow;
   }
 });
+
+test('8. Thai Health Information UI Dynamic Population & Updates (R3)', () => {
+  const env = createMockEnvironment();
+  global.document = env.mockDocument;
+  global.window = {
+    speechSynthesis: env.mockSpeechSynthesis
+  };
+  global.SpeechSynthesisUtterance = env.MockSpeechSynthesisUtterance;
+
+  delete require.cache[require.resolve('../public/script.js')];
+  const script = require('../public/script.js');
+
+  const benefitsList = env.getOrCreateElement('health-benefits-list', 'ul');
+  const cautionElderly = env.getOrCreateElement('caution-elderly-text', 'p');
+  const cautionPregnant = env.getOrCreateElement('caution-pregnant-text', 'p');
+  const cautionGeneral = env.getOrCreateElement('caution-general-text', 'p');
+
+  script.setState({
+    posesData,
+    selectedPoseKey: null
+  });
+  script.renderPoseButtons();
+
+  // Test 1: Selecting t_pose populates benefits and cautions
+  script.selectPose('t_pose');
+  const tPoseHC = posesData.t_pose.health_context;
+  assert.ok(benefitsList.innerHTML.includes(tPoseHC.benefits[0]), 'Benefits list must render t_pose benefits');
+  assert.equal(cautionElderly.textContent, tPoseHC.cautions.elderly);
+  assert.equal(cautionPregnant.textContent, tPoseHC.cautions.pregnant);
+  assert.equal(cautionGeneral.textContent, tPoseHC.cautions.general);
+
+  // Test 2: Switching to kae_kiat_upward immediately updates all fields
+  script.selectPose('kae_kiat_upward');
+  const upwardHC = posesData.kae_kiat_upward.health_context;
+  assert.ok(benefitsList.innerHTML.includes(upwardHC.benefits[0]), 'Benefits list must render kae_kiat_upward benefits');
+  assert.equal(cautionElderly.textContent, upwardHC.cautions.elderly);
+  assert.equal(cautionPregnant.textContent, upwardHC.cautions.pregnant);
+  assert.equal(cautionGeneral.textContent, upwardHC.cautions.general);
+
+  // Test 3: Defensive handling for null or missing health_context
+  script.updateHealthInfoUI(null);
+  assert.ok(benefitsList.innerHTML.includes('เลือกท่าทางเพื่อดูสรรพคุณทางสุขภาพ'));
+  assert.equal(cautionElderly.textContent, '-');
+  assert.equal(cautionPregnant.textContent, '-');
+  assert.equal(cautionGeneral.textContent, '-');
+
+  // Test 4: Defensive handling for pose with no health_context
+  script.updateHealthInfoUI({ name: 'custom_pose' });
+  assert.ok(benefitsList.innerHTML.includes('ไม่มีข้อมูลทางสุขภาพ'));
+  assert.equal(cautionElderly.textContent, '-');
+  assert.equal(cautionPregnant.textContent, '-');
+  assert.equal(cautionGeneral.textContent, '-');
+});

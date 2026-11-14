@@ -21,6 +21,17 @@
           <canvas id="output-canvas"></canvas>
           <!-- Live angle overlay on camera -->
           <div id="angle-overlay" class="angle-overlay"></div>
+
+          <!-- In-Camera PiP Reference Guide (R1) -->
+          <div id="pose-guide-pip" class="pose-guide-pip pose-ref-hud" role="region" aria-label="ท่าต้นแบบ">
+            <div class="pip-header">
+              <span id="pose-guide-label" class="pose-guide-label">🧘 ท่าต้นแบบ</span>
+              <button id="pose-guide-pip-toggle" class="pip-toggle-btn" aria-label="ย่อหรือขยายภาพต้นแบบ" title="ย่อ/ขยาย">−</button>
+            </div>
+            <div id="pose-guide-pip-body" class="pip-body">
+              <img id="pose-guide-img" class="pose-guide-img ref-hud-img" src="images/poses/placeholder.svg" alt="ท่าต้นแบบ">
+            </div>
+          </div>
         </div>
       </section>
 
@@ -31,6 +42,23 @@
           <h2 class="section-label">เลือกท่าทาง</h2>
           <div id="pose-list" class="pose-list">
             <p class="loading-hint">กำลังโหลดท่าทาง...</p>
+          </div>
+        </div>
+
+        <!-- Posture Reference Card (R1) -->
+        <div id="pose-reference-card" class="pose-reference-card">
+          <div class="pose-ref-header">
+            <h2 class="section-label">📐 ท่าต้นแบบ (Reference Guide)</h2>
+            <span id="pose-ref-caption" class="pose-ref-caption">รอเลือกท่า...</span>
+          </div>
+          <div class="pose-ref-body">
+            <div class="pose-ref-img-wrap">
+              <img id="reference-pose-img" class="reference-pose-img pose-ref-img" src="images/poses/placeholder.svg" alt="ภาพท่าต้นแบบ">
+            </div>
+            <div class="pose-ref-details">
+              <div id="reference-pose-title" class="reference-pose-title">เลือกท่าทางเพื่อดูภาพตัวอย่าง</div>
+              <p id="reference-pose-desc" class="reference-pose-desc">แสดงสรีระและมุมเป้าหมายตามแบบแผนฤๅษีดัดตน</p>
+            </div>
           </div>
         </div>
 
@@ -49,6 +77,39 @@
           </div>
 
           <div id="advice" class="advice">กรุณาเลือกท่าทางที่ต้องการฝึกด้านบน</div>
+        </div>
+
+        <!-- Health Information Card (R3) -->
+        <div id="health-info-card" class="health-info-card">
+          <div class="health-info-header">
+            <h2 class="section-label">🌿 ประโยชน์และข้อควรระวังทางสุขภาพ</h2>
+            <span class="health-source-badge">การแพทย์แผนไทย (DTAM)</span>
+          </div>
+
+          <!-- Benefits Section -->
+          <div class="health-section benefits-section">
+            <h3 class="health-sublabel">✨ ประโยชน์และสรรพคุณ</h3>
+            <ul id="health-benefits-list" class="health-list benefits-list">
+              <li>เลือกท่าทางเพื่อดูสรรพคุณทางสุขภาพ</li>
+            </ul>
+          </div>
+
+          <!-- Categorized Cautions Section -->
+          <div class="health-section cautions-section">
+            <h3 class="health-sublabel">⚠️ ข้อควรระวังตามกลุ่มบุคคล</h3>
+            <div class="caution-group caution-elderly">
+              <div class="caution-badge">🧓 ผู้สูงอายุ</div>
+              <p id="caution-elderly-text" class="caution-text">-</p>
+            </div>
+            <div class="caution-group caution-pregnant">
+              <div class="caution-badge">🤰 สตรีมีครรภ์</div>
+              <p id="caution-pregnant-text" class="caution-text">-</p>
+            </div>
+            <div class="caution-group caution-general">
+              <div class="caution-badge">🧘 บุคคลทั่วไป</div>
+              <p id="caution-general-text" class="caution-text">-</p>
+            </div>
+          </div>
         </div>
 
         <button id="tts-toggle" class="btn-outline">🔊 เสียงแนะนำ: ปิด</button>

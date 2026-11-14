@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/verify_poses.test.js && node test/timer_verification.js"
+    "test": "node --test test/verify_poses.test.js && node test/timer_verification.js && node --test test/e2e_requirements.test.js && node --test test/m1_visual_reference.test.js"
   },
   "type": "commonjs",
   "dependencies": {
