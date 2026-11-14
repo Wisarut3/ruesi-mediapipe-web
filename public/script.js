@@ -313,6 +313,52 @@ if (pipToggleBtnEl && pipOverlayElement) {
   });
 }
 
+// ─── PiP In-Camera Sizing Controls (S / M / L / XL) ───────────────────────────
+const pipSizeToggleBtn = typeof document !== 'undefined' ? document.getElementById('pip-size-toggle') : null;
+const pipSizeButtons = typeof document !== 'undefined' ? (document.querySelectorAll('.btn-pip-size') || []) : [];
+const pipSizes = ['sm', 'md', 'lg', 'xl'];
+let currentPipSize = 'md';
+
+function setPipSize(size) {
+  if (!pipSizes.includes(size)) return;
+  currentPipSize = size;
+  const overlay = (typeof document !== 'undefined' && (document.getElementById('pose-guide-pip') || document.getElementById('pose-ref-hud'))) || poseRefHudEl;
+  if (overlay && overlay.classList) {
+    pipSizes.forEach(s => overlay.classList.remove(`size-${s}`));
+    overlay.classList.add(`size-${size}`);
+  }
+  if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+    const btns = document.querySelectorAll('.btn-pip-size');
+    if (btns && typeof btns.forEach === 'function') {
+      btns.forEach(btn => {
+        if (btn.classList && typeof btn.classList.toggle === 'function') {
+          btn.classList.toggle('active', btn.getAttribute('data-size') === size);
+        }
+      });
+    }
+  }
+}
+
+if (pipSizeButtons && typeof pipSizeButtons.forEach === 'function') {
+  pipSizeButtons.forEach(btn => {
+    if (btn && typeof btn.addEventListener === 'function') {
+      btn.addEventListener('click', (e) => {
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        const size = btn.getAttribute('data-size');
+        if (size) setPipSize(size);
+      });
+    }
+  });
+}
+
+if (pipSizeToggleBtn && typeof pipSizeToggleBtn.addEventListener === 'function') {
+  pipSizeToggleBtn.addEventListener('click', (e) => {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    const nextIdx = (pipSizes.indexOf(currentPipSize) + 1) % pipSizes.length;
+    setPipSize(pipSizes[nextIdx]);
+  });
+}
+
 // ─── Interactive Reference Zoom Modal ────────────────────────────────────────
 let currentZoomScale = 1;
 const MIN_ZOOM = 0.75;
@@ -769,6 +815,7 @@ if (typeof module !== 'undefined' && module.exports) {
     openZoomModal,
     closeZoomModal,
     setZoomScale,
+    setPipSize,
     escapeHtml,
     onPoseComplete,
     renderPoseButtons,

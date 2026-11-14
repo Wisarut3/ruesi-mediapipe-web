@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ระบบวิเคราะห์ท่าทางฤๅษีดัดตน — MediaPipe</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=2.1">
 </head>
 <body>
   <div class="app">
@@ -23,18 +23,26 @@
           <div id="angle-overlay" class="angle-overlay"></div>
 
           <!-- In-Camera PiP Reference Guide (R1) -->
-          <div id="pose-guide-pip" class="pose-guide-pip pose-ref-hud" role="region" aria-label="ท่าต้นแบบ">
+          <div id="pose-guide-pip" class="pose-guide-pip pose-ref-hud size-md" role="region" aria-label="ท่าต้นแบบ">
             <div class="pip-header">
               <span id="pose-guide-label" class="pose-guide-label">🧘 ท่าต้นแบบ</span>
               <div class="pip-actions">
+                <button id="pip-size-toggle" class="pip-action-btn" aria-label="เปลี่ยนขนาดภาพ" title="คลิกเพื่อปรับขนาดภาพ (S / M / L / XL)">⤢</button>
                 <button id="pose-guide-zoom-btn" class="pip-action-btn zoom-trigger-btn" aria-label="ขยายดูภาพใหญ่" title="คลิกเพื่อขยายดูภาพใหญ่ (Zoom)">🔍</button>
                 <button id="pose-guide-pip-toggle" class="pip-toggle-btn pip-action-btn" aria-label="ย่อหรือขยายภาพต้นแบบ" title="ย่อ/ซ่อน">−</button>
               </div>
             </div>
             <div id="pose-guide-pip-body" class="pip-body">
-              <div class="pip-img-container" id="pip-img-container" title="คลิกเพื่อขยายดูภาพใหญ่">
+              <div class="pip-img-container" id="pip-img-container" title="คลิกเพื่อขยายดูภาพใหญ่แบบเต็มจอ">
                 <img id="pose-guide-img" class="pose-guide-img ref-hud-img zoomable-img" src="images/poses/placeholder.svg" alt="ท่าต้นแบบ">
-                <div class="zoom-hint-badge">🔍 คลิกซูม</div>
+                <div class="zoom-hint-badge">🔍 คลิกดูภาพใหญ่</div>
+              </div>
+              <div class="pip-size-bar">
+                <span class="pip-size-label">ขนาด:</span>
+                <button type="button" class="btn-pip-size" data-size="sm" title="ขนาดเล็ก">S</button>
+                <button type="button" class="btn-pip-size active" data-size="md" title="ขนาดปกติ">M</button>
+                <button type="button" class="btn-pip-size" data-size="lg" title="ขนาดใหญ่">L</button>
+                <button type="button" class="btn-pip-size" data-size="xl" title="ขนาดใหญ่พิเศษ">XL</button>
               </div>
             </div>
           </div>
@@ -180,7 +188,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-  <script src="pose-evaluator.js"></script>
-  <script src="script.js"></script>
+  <script src="pose-evaluator.js?v=2.1"></script>
+  <script src="script.js?v=2.1"></script>
 </body>
 </html>

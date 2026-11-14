@@ -173,11 +173,86 @@ main { display: grid; grid-template-columns: 1fr 380px; flex: 1; overflow: hidde
   color: #0f172a;
 }
 
+.pip-size-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding-top: 0.35rem;
+  margin-top: 0.25rem;
+  border-top: 1px solid rgba(51, 65, 85, 0.45);
+}
+
+.pip-size-label {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  font-weight: 600;
+  margin-right: 0.15rem;
+}
+
+.btn-pip-size {
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid #334155;
+  color: #94a3b8;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.12rem 0.42rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1.2;
+}
+
+.btn-pip-size:hover {
+  background: #334155;
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
+.btn-pip-size.active {
+  background: #38bdf8;
+  color: #0f172a;
+  border-color: #38bdf8;
+}
+
+/* PiP Size Multipliers */
+#pose-guide-pip.size-sm, .pose-guide-pip.size-sm {
+  width: 160px;
+  max-width: 25vw;
+}
+#pose-guide-pip.size-sm .pip-body {
+  max-height: 180px;
+}
+
+#pose-guide-pip.size-md, .pose-guide-pip.size-md {
+  width: 230px;
+  max-width: 35vw;
+}
+#pose-guide-pip.size-md .pip-body {
+  max-height: 260px;
+}
+
+#pose-guide-pip.size-lg, .pose-guide-pip.size-lg {
+  width: 340px;
+  max-width: 48vw;
+}
+#pose-guide-pip.size-lg .pip-body {
+  max-height: 370px;
+}
+
+#pose-guide-pip.size-xl, .pose-guide-pip.size-xl {
+  width: 460px;
+  max-width: 58vw;
+}
+#pose-guide-pip.size-xl .pip-body {
+  max-height: 490px;
+}
+
 /* Minimized PiP State */
 #pose-guide-pip.minimized,
 .pose-guide-pip.minimized {
-  width: 120px;
-  max-width: 120px;
+  width: 120px !important;
+  max-width: 120px !important;
   padding: 0.35rem 0.5rem;
   opacity: 0.85;
 }
