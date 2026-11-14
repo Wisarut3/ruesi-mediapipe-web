@@ -313,6 +313,130 @@ if (pipToggleBtnEl && pipOverlayElement) {
   });
 }
 
+// ─── Interactive Reference Zoom Modal ────────────────────────────────────────
+let currentZoomScale = 1;
+const MIN_ZOOM = 0.75;
+const MAX_ZOOM = 3.5;
+const ZOOM_STEP = 0.25;
+
+const zoomModalEl = typeof document !== 'undefined' ? document.getElementById('pose-zoom-modal') : null;
+const zoomModalImgEl = typeof document !== 'undefined' ? document.getElementById('zoom-modal-img') : null;
+const zoomModalTitleEl = typeof document !== 'undefined' ? document.getElementById('zoom-modal-title') : null;
+const zoomModalDescEl = typeof document !== 'undefined' ? document.getElementById('zoom-modal-desc') : null;
+const zoomModalCloseBtn = typeof document !== 'undefined' ? document.getElementById('zoom-modal-close') : null;
+const zoomModalBackdrop = typeof document !== 'undefined' ? document.getElementById('zoom-modal-backdrop') : null;
+const zoomInBtn = typeof document !== 'undefined' ? document.getElementById('zoom-in-btn') : null;
+const zoomOutBtn = typeof document !== 'undefined' ? document.getElementById('zoom-out-btn') : null;
+const zoomResetBtn = typeof document !== 'undefined' ? document.getElementById('zoom-reset-btn') : null;
+const zoomViewportEl = typeof document !== 'undefined' ? document.getElementById('zoom-viewport') : null;
+
+function setZoomScale(scale) {
+  currentZoomScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(scale * 100) / 100));
+  if (zoomModalImgEl) {
+    zoomModalImgEl.style.transform = `scale(${currentZoomScale})`;
+  }
+  if (zoomResetBtn) {
+    zoomResetBtn.textContent = `↺ ${Math.round(currentZoomScale * 100)}%`;
+  }
+  return currentZoomScale;
+}
+
+function openZoomModal(pose) {
+  if (!zoomModalEl) return;
+  const targetPose = pose || (selectedPoseKey && posesData[selectedPoseKey]);
+  const fallbackSrc = 'images/poses/placeholder.svg';
+  let src = fallbackSrc;
+  if (targetPose && targetPose.image) {
+    src = targetPose.image;
+  } else if (poseRefImgEl && poseRefImgEl.src) {
+    src = poseRefImgEl.src;
+  } else if (refHudImgEl && refHudImgEl.src) {
+    src = refHudImgEl.src;
+  }
+
+  const title = (targetPose && targetPose.name) ? targetPose.name : 'ภาพท่าทางต้นแบบ';
+  const desc = (targetPose && targetPose.description) ? targetPose.description : 'แสดงสรีระและมุมเป้าหมายตามแบบแผนฤๅษีดัดตน';
+
+  if (zoomModalImgEl) {
+    zoomModalImgEl.src = src;
+    zoomModalImgEl.alt = title;
+  }
+  if (zoomModalTitleEl) zoomModalTitleEl.textContent = title;
+  if (zoomModalDescEl) zoomModalDescEl.textContent = desc;
+
+  setZoomScale(1);
+  zoomModalEl.classList.add('active');
+  zoomModalEl.setAttribute('aria-hidden', 'false');
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeZoomModal() {
+  if (!zoomModalEl) return;
+  zoomModalEl.classList.remove('active');
+  zoomModalEl.setAttribute('aria-hidden', 'true');
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.style.overflow = '';
+  }
+}
+
+// Bind zoom modal controls
+if (zoomInBtn && typeof zoomInBtn.addEventListener === 'function') {
+  zoomInBtn.addEventListener('click', () => setZoomScale(currentZoomScale + ZOOM_STEP));
+}
+if (zoomOutBtn && typeof zoomOutBtn.addEventListener === 'function') {
+  zoomOutBtn.addEventListener('click', () => setZoomScale(currentZoomScale - ZOOM_STEP));
+}
+if (zoomResetBtn && typeof zoomResetBtn.addEventListener === 'function') {
+  zoomResetBtn.addEventListener('click', () => setZoomScale(1));
+}
+if (zoomModalCloseBtn && typeof zoomModalCloseBtn.addEventListener === 'function') {
+  zoomModalCloseBtn.addEventListener('click', closeZoomModal);
+}
+if (zoomModalBackdrop && typeof zoomModalBackdrop.addEventListener === 'function') {
+  zoomModalBackdrop.addEventListener('click', closeZoomModal);
+}
+
+// Wheel zoom in modal viewport
+if (zoomViewportEl && typeof zoomViewportEl.addEventListener === 'function') {
+  zoomViewportEl.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
+    setZoomScale(currentZoomScale + delta);
+  }, { passive: false });
+}
+
+// Keyboard ESC to close
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && zoomModalEl && zoomModalEl.classList && typeof zoomModalEl.classList.contains === 'function' && zoomModalEl.classList.contains('active')) {
+      closeZoomModal();
+    }
+  });
+}
+
+// Attach zoom triggers to reference images and buttons
+if (typeof document !== 'undefined') {
+  const zoomTriggers = [
+    typeof document.getElementById === 'function' ? document.getElementById('pose-guide-zoom-btn') : null,
+    typeof document.getElementById === 'function' ? document.getElementById('card-zoom-btn') : null,
+    typeof document.getElementById === 'function' ? document.getElementById('pip-img-container') : null,
+    typeof document.getElementById === 'function' ? document.getElementById('pose-ref-img-wrap') : null,
+    typeof document.getElementById === 'function' ? document.getElementById('pose-guide-img') : null,
+    typeof document.getElementById === 'function' ? document.getElementById('reference-pose-img') : null,
+    poseRefImgEl,
+    refHudImgEl
+  ].filter(el => el && typeof el.addEventListener === 'function');
+
+  Array.from(new Set(zoomTriggers)).forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+      openZoomModal();
+    });
+  });
+}
+
 // ─── TTS ──────────────────────────────────────────────────────────────────────
 if (ttsBtn) {
   ttsBtn.addEventListener('click', () => {
@@ -642,6 +766,9 @@ if (typeof module !== 'undefined' && module.exports) {
     updateTimerUI,
     updateHealthInfoUI,
     updateVisualReferenceUI,
+    openZoomModal,
+    closeZoomModal,
+    setZoomScale,
     escapeHtml,
     onPoseComplete,
     renderPoseButtons,

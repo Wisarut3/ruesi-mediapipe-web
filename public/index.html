@@ -26,10 +26,16 @@
           <div id="pose-guide-pip" class="pose-guide-pip pose-ref-hud" role="region" aria-label="ท่าต้นแบบ">
             <div class="pip-header">
               <span id="pose-guide-label" class="pose-guide-label">🧘 ท่าต้นแบบ</span>
-              <button id="pose-guide-pip-toggle" class="pip-toggle-btn" aria-label="ย่อหรือขยายภาพต้นแบบ" title="ย่อ/ขยาย">−</button>
+              <div class="pip-actions">
+                <button id="pose-guide-zoom-btn" class="pip-action-btn zoom-trigger-btn" aria-label="ขยายดูภาพใหญ่" title="คลิกเพื่อขยายดูภาพใหญ่ (Zoom)">🔍</button>
+                <button id="pose-guide-pip-toggle" class="pip-toggle-btn pip-action-btn" aria-label="ย่อหรือขยายภาพต้นแบบ" title="ย่อ/ซ่อน">−</button>
+              </div>
             </div>
             <div id="pose-guide-pip-body" class="pip-body">
-              <img id="pose-guide-img" class="pose-guide-img ref-hud-img" src="images/poses/placeholder.svg" alt="ท่าต้นแบบ">
+              <div class="pip-img-container" id="pip-img-container" title="คลิกเพื่อขยายดูภาพใหญ่">
+                <img id="pose-guide-img" class="pose-guide-img ref-hud-img zoomable-img" src="images/poses/placeholder.svg" alt="ท่าต้นแบบ">
+                <div class="zoom-hint-badge">🔍 คลิกซูม</div>
+              </div>
             </div>
           </div>
         </div>
@@ -49,11 +55,15 @@
         <div id="pose-reference-card" class="pose-reference-card">
           <div class="pose-ref-header">
             <h2 class="section-label">📐 ท่าต้นแบบ (Reference Guide)</h2>
-            <span id="pose-ref-caption" class="pose-ref-caption">รอเลือกท่า...</span>
+            <div class="pose-ref-actions">
+              <span id="pose-ref-caption" class="pose-ref-caption">รอเลือกท่า...</span>
+              <button id="card-zoom-btn" class="btn-zoom-card" title="ขยายภาพต้นแบบดูรายละเอียด">🔍 ขยายภาพ</button>
+            </div>
           </div>
           <div class="pose-ref-body">
-            <div class="pose-ref-img-wrap">
-              <img id="reference-pose-img" class="reference-pose-img pose-ref-img" src="images/poses/placeholder.svg" alt="ภาพท่าต้นแบบ">
+            <div class="pose-ref-img-wrap" id="pose-ref-img-wrap" title="คลิกเพื่อขยายภาพ">
+              <img id="reference-pose-img" class="reference-pose-img pose-ref-img zoomable-img" src="images/poses/placeholder.svg" alt="ภาพท่าต้นแบบ">
+              <div class="zoom-hover-overlay">🔍 ขยาย</div>
             </div>
             <div class="pose-ref-details">
               <div id="reference-pose-title" class="reference-pose-title">เลือกท่าทางเพื่อดูภาพตัวอย่าง</div>
@@ -136,6 +146,34 @@
 
       </section>
     </main>
+  </div>
+
+  <!-- High-Res Interactive Zoom Modal -->
+  <div id="pose-zoom-modal" class="zoom-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="zoom-modal-title">
+    <div class="zoom-modal-backdrop" id="zoom-modal-backdrop"></div>
+    <div class="zoom-modal-dialog">
+      <div class="zoom-modal-header">
+        <div class="zoom-modal-title-group">
+          <span class="zoom-modal-badge">🧘‍♂️ ท่าต้นแบบฤๅษีดัดตน</span>
+          <h3 id="zoom-modal-title" class="zoom-modal-title">ท่าต้นแบบ</h3>
+        </div>
+        <div class="zoom-modal-controls">
+          <button id="zoom-in-btn" class="zoom-ctrl-btn" title="ขยายภาพ (Zoom In)">➕ ซูมเข้า</button>
+          <button id="zoom-out-btn" class="zoom-ctrl-btn" title="ย่อภาพ (Zoom Out)">➖ ซูมออก</button>
+          <button id="zoom-reset-btn" class="zoom-ctrl-btn" title="ขนาดปกติ 100% (Reset)">↺ 100%</button>
+          <button id="zoom-modal-close" class="zoom-close-btn" aria-label="ปิดหน้าต่างขยาย" title="ปิด (Esc)">✕</button>
+        </div>
+      </div>
+      <div class="zoom-modal-body" id="zoom-viewport">
+        <div class="zoom-img-container" id="zoom-img-container">
+          <img id="zoom-modal-img" class="zoom-modal-img" src="images/poses/placeholder.svg" alt="ภาพท่าทางขยายใหญ่">
+        </div>
+      </div>
+      <div class="zoom-modal-footer">
+        <p id="zoom-modal-desc" class="zoom-modal-desc">แสดงสรีระและมุมเป้าหมายตามแบบแผนฤๅษีดัดตน</p>
+        <span class="zoom-tip">💡 ทิป: สามารถใช้ลูกกลิ้งเมาส์ (Scroll Wheel) เพื่อซูมเข้า/ออก หรือคลิก ✕ / กด Esc เพื่อปิด</span>
+      </div>
+    </div>
   </div>
 
   <!-- MediaPipe CDN — requires internet on first load -->
