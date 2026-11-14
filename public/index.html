@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบวิเคราะห์ท่าทางฤๅษีดัดตน — MediaPipe</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>🧘‍♂️ ระบบวิเคราะห์ท่าทางฤๅษีดัดตน <span class="version-tag">MediaPipe</span></h1>
+      <div id="camera-status" class="badge">กำลังเริ่มกล้อง...</div>
+    </header>
+
+    <main>
+      <!-- Left: Camera with skeleton overlay -->
+      <section class="camera-panel">
+        <div class="video-container">
+          <video id="webcam" autoplay playsinline></video>
+          <canvas id="output-canvas"></canvas>
+          <!-- Live angle overlay on camera -->
+          <div id="angle-overlay" class="angle-overlay"></div>
+        </div>
+      </section>
+
+      <!-- Right: Controls + Status -->
+      <section class="control-panel">
+
+        <div class="pose-selector">
+          <h2 class="section-label">เลือกท่าทาง</h2>
+          <div id="pose-list" class="pose-list">
+            <p class="loading-hint">กำลังโหลดท่าทาง...</p>
+          </div>
+        </div>
+
+        <div id="status-card" class="status-card waiting">
+          <h2 class="section-label">สถานะ</h2>
+          <div id="pose-label" class="pose-label">รอเลือกท่า...</div>
+          
+          <!-- Prominent Pose Hold Timer Display (R1) -->
+          <div id="timer-display" class="timer-display">
+            <div class="timer-digits">
+              ⏱️ <span id="timer-count">0</span> / <span id="timer-target">10</span>s
+            </div>
+            <div class="timer-progress-track">
+              <div id="timer-progress-bar" class="timer-progress-bar"></div>
+            </div>
+          </div>
+
+          <div id="advice" class="advice">กรุณาเลือกท่าทางที่ต้องการฝึกด้านบน</div>
+        </div>
+
+        <button id="tts-toggle" class="btn-outline">🔊 เสียงแนะนำ: ปิด</button>
+
+        <!-- Settings Card for Pose Hold Duration and Auto-Advance (R2, R3) -->
+        <div class="settings-card">
+          <h2 class="section-label">ตั้งค่าการฝึก (Settings)</h2>
+          <div class="setting-item">
+            <label for="duration-input">ระยะเวลาค้างท่า (วินาที):</label>
+            <input type="number" id="duration-input" class="number-input" min="1" max="120" value="10">
+          </div>
+          <div class="setting-item">
+            <label class="toggle-switch-label" for="auto-advance-toggle">
+              <input type="checkbox" id="auto-advance-toggle">
+              <span>เปลี่ยนท่าถัดไปอัตโนมัติ (Auto-Advance)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="debug-panel">
+          <h2 class="section-label">ค่ามุมสด (Live Angles)</h2>
+          <div id="angle-readings" class="angle-readings-list"></div>
+        </div>
+
+      </section>
+    </main>
+  </div>
+
+  <!-- MediaPipe CDN — requires internet on first load -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <script src="pose-evaluator.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

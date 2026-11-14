@@ -1,0 +1,14 @@
+{
+  "name": "ruesi-mediapipe-web",
+  "version": "1.0.0",
+  "description": "Ruesi Dadton AI Posture Coaching — MediaPipe standalone version",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/verify_poses.test.js && node test/timer_verification.js"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.3.0"
+  }
+}
