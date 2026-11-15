@@ -447,6 +447,28 @@ main { display: grid; grid-template-columns: 1fr 380px; flex: 1; overflow: hidde
 .pose-label { font-size: 1.15rem; font-weight: 800; margin-bottom: 0.5rem; }
 .advice { font-size: 0.95rem; line-height: 1.6; color: #cbd5e1; }
 
+/* Contextual Positioning Guidance Tip Badge (R4) */
+#pose-guidance-tip,
+.pose-guidance-tip {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  color: #7dd3fc;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.2s ease-in-out;
+}
+
+#pose-guidance-tip.hidden,
+.pose-guidance-tip.hidden {
+  display: none !important;
+}
+
 /* Timer display inside status card (R1) */
 .timer-display {
   margin: 0.75rem 0;

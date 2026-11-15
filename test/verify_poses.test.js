@@ -602,3 +602,196 @@ test('7. Authentic Thai Health Context & Cautions Integrity (R3)', async (t) => 
     });
   }
 });
+
+test('8. Calibrated Natural Angle Tolerances & Boundary Verification (R2)', async (t) => {
+  const calibratedPoses = ['kae_kiat_forward', 'kae_kiat_left', 'kae_kiat_right'];
+
+  await t.test('Poses JSON contains calibrated [125, 180] elbow ranges and [55, 125] arm ranges', () => {
+    for (const poseKey of calibratedPoses) {
+      const pose = poses[poseKey];
+      assert.ok(pose, `Pose ${poseKey} must exist in poses.json`);
+
+      const elbowRules = pose.rules.filter(r => r.id.includes('elbow'));
+      assert.equal(elbowRules.length, 2, `${poseKey} must have 2 elbow rules`);
+      for (const rule of elbowRules) {
+        assert.equal(rule.min, 125, `${poseKey} ${rule.id} min must be 125`);
+        assert.equal(rule.max, 180, `${poseKey} ${rule.id} max must be 180`);
+        assert.ok(rule.feedback_low && rule.feedback_low.length > 0, `${rule.id} must have feedback_low`);
+        assert.ok(rule.feedback_high && rule.feedback_high.length > 0, `${rule.id} must have feedback_high`);
+      }
+
+      const armRules = pose.rules.filter(r => r.id.includes('arm'));
+      assert.equal(armRules.length, 2, `${poseKey} must have 2 arm rules`);
+      for (const rule of armRules) {
+        assert.equal(rule.min, 55, `${poseKey} ${rule.id} min must be 55`);
+        assert.equal(rule.max, 125, `${poseKey} ${rule.id} max must be 125`);
+        assert.ok(rule.feedback_low && rule.feedback_low.length > 0, `${rule.id} must have feedback_low`);
+        assert.ok(rule.feedback_high && rule.feedback_high.length > 0, `${rule.id} must have feedback_high`);
+      }
+    }
+  });
+
+  await t.test('Boundary angle evaluation for calibrated elbow rules', () => {
+    const forwardPose = poses.kae_kiat_forward;
+    const leftElbowRule = forwardPose.rules.find(r => r.id === 'left_elbow');
+
+    // 125° (min bound) passes
+    const lm125 = makeSyntheticLandmarks(leftElbowRule, 125);
+    assert.equal(evaluateRule(leftElbowRule, lm125).ok, true);
+
+    // 130° (natural carrying angle / slight bend) passes
+    const lm130 = makeSyntheticLandmarks(leftElbowRule, 130);
+    assert.equal(evaluateRule(leftElbowRule, lm130).ok, true);
+
+    // 180° (max bound) passes
+    const lm180 = makeSyntheticLandmarks(leftElbowRule, 180);
+    assert.equal(evaluateRule(leftElbowRule, lm180).ok, true);
+
+    // 124° (below calibrated min) fails
+    const lm124 = makeSyntheticLandmarks(leftElbowRule, 124);
+    const res124 = evaluateRule(leftElbowRule, lm124);
+    assert.equal(res124.ok, false);
+    assert.equal(res124.feedback, leftElbowRule.feedback_low);
+  });
+
+  await t.test('Boundary angle evaluation for calibrated arm rules', () => {
+    const forwardPose = poses.kae_kiat_forward;
+    const leftArmRule = forwardPose.rules.find(r => r.id === 'left_arm');
+
+    // 55° (min bound) passes
+    const lm55 = makeSyntheticLandmarks(leftArmRule, 55);
+    assert.equal(evaluateRule(leftArmRule, lm55).ok, true);
+
+    // 90° (midpoint) passes
+    const lm90 = makeSyntheticLandmarks(leftArmRule, 90);
+    assert.equal(evaluateRule(leftArmRule, lm90).ok, true);
+
+    // 125° (max bound) passes
+    const lm125 = makeSyntheticLandmarks(leftArmRule, 125);
+    assert.equal(evaluateRule(leftArmRule, lm125).ok, true);
+
+    // 54° (below calibrated min) fails
+    const lm54 = makeSyntheticLandmarks(leftArmRule, 54);
+    const res54 = evaluateRule(leftArmRule, lm54);
+    assert.equal(res54.ok, false);
+    assert.equal(res54.feedback, leftArmRule.feedback_low);
+
+    // 126° (above calibrated max) fails
+    const lm126 = makeSyntheticLandmarks(leftArmRule, 126);
+    const res126 = evaluateRule(leftArmRule, lm126);
+    assert.equal(res126.ok, false);
+    assert.equal(res126.feedback, leftArmRule.feedback_high);
+  });
+});
+
+test('9. Hybrid Occlusion-Aware & Directional Detection for Side Poses (R3)', async (t) => {
+  function makeSidePoseLandmarks({
+    isLeft = true,
+    crossVis = 0.2,
+    frontVis = 1.0,
+    frontElbowBent = false,
+    wristReachingCorrectSide = true
+  }) {
+    const lm = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, z: 0, visibility: 1.0 }));
+    // Torso shoulders and hips -> centerline X = 0.5
+    lm[11] = { x: 0.4, y: 0.4, z: 0, visibility: isLeft ? frontVis : crossVis };
+    lm[12] = { x: 0.6, y: 0.4, z: 0, visibility: isLeft ? crossVis : frontVis };
+    lm[23] = { x: 0.4, y: 0.8, z: 0, visibility: 1.0 };
+    lm[24] = { x: 0.6, y: 0.8, z: 0, visibility: 1.0 };
+
+    if (isLeft) {
+      // Front is left arm (11, 13, 15). Arm angle = 90° (down from 11 to 23, left from 11 to 13).
+      lm[13] = { x: 0.2, y: 0.4, z: 0, visibility: frontVis };
+      if (frontElbowBent) {
+        // Bent elbow at 90°
+        lm[15] = { x: 0.2, y: 0.2, z: 0, visibility: frontVis };
+      } else {
+        // Straight elbow (180°), reaching left or right
+        const wx = wristReachingCorrectSide ? 0.1 : 0.7;
+        lm[15] = { x: wx, y: 0.4, z: 0, visibility: frontVis };
+      }
+      // Crossing is right arm (12, 14, 16)
+      lm[14] = { x: 0.5, y: 0.4, z: 0, visibility: crossVis };
+      lm[16] = { x: 0.3, y: 0.4, z: 0, visibility: crossVis };
+    } else {
+      // Front is right arm (12, 14, 16). Arm angle = 90°.
+      lm[14] = { x: 0.8, y: 0.4, z: 0, visibility: frontVis };
+      if (frontElbowBent) {
+        lm[16] = { x: 0.8, y: 0.2, z: 0, visibility: frontVis };
+      } else {
+        const wx = wristReachingCorrectSide ? 0.9 : 0.3;
+        lm[16] = { x: wx, y: 0.4, z: 0, visibility: frontVis };
+      }
+      // Crossing is left arm (11, 13, 15)
+      lm[13] = { x: 0.5, y: 0.4, z: 0, visibility: crossVis };
+      lm[15] = { x: 0.7, y: 0.4, z: 0, visibility: crossVis };
+    }
+    return lm;
+  }
+
+  await t.test('kae_kiat_left passes when crossing right arm is occluded and wrists reach leftwards', () => {
+    const lm = makeSidePoseLandmarks({ isLeft: true, crossVis: 0.2, frontVis: 1.0, wristReachingCorrectSide: true });
+    const res = evaluatePose(poses.kae_kiat_left, lm);
+    assert.equal(res.allCorrect, true, 'Pose must pass via hybrid occlusion fallback');
+    assert.equal(res.feedbacks.length, 0, 'Feedbacks must be cleared on successful fallback');
+
+    const occludedResults = res.results.filter(r => r.rule.id.startsWith('right'));
+    assert.ok(occludedResults.length > 0);
+    for (const r of occludedResults) {
+      assert.equal(r.ok, true);
+      assert.equal(r.occludedFallback, true);
+    }
+  });
+
+  await t.test('kae_kiat_left fails when crossing right arm is occluded but wrists reach rightwards (wrong direction)', () => {
+    const lm = makeSidePoseLandmarks({ isLeft: true, crossVis: 0.2, frontVis: 1.0, wristReachingCorrectSide: false });
+    const res = evaluatePose(poses.kae_kiat_left, lm);
+    assert.equal(res.allCorrect, false, 'Pose must fail when wrists reach wrong direction');
+  });
+
+  await t.test('kae_kiat_left fails when crossing right arm is occluded but front left elbow is bent', () => {
+    const lm = makeSidePoseLandmarks({ isLeft: true, crossVis: 0.2, frontVis: 1.0, frontElbowBent: true, wristReachingCorrectSide: true });
+    const res = evaluatePose(poses.kae_kiat_left, lm);
+    assert.equal(res.allCorrect, false, 'Pose must fail when front visible arm violates angle');
+    assert.ok(res.feedbacks.length > 0, 'Must have feedback for front arm violation');
+  });
+
+  await t.test('kae_kiat_right passes when crossing left arm is occluded and wrists reach rightwards', () => {
+    const lm = makeSidePoseLandmarks({ isLeft: false, crossVis: 0.2, frontVis: 1.0, wristReachingCorrectSide: true });
+    const res = evaluatePose(poses.kae_kiat_right, lm);
+    assert.equal(res.allCorrect, true, 'Pose must pass via hybrid occlusion fallback');
+    assert.equal(res.feedbacks.length, 0);
+
+    const occludedResults = res.results.filter(r => r.rule.id.startsWith('left'));
+    assert.ok(occludedResults.length > 0);
+    for (const r of occludedResults) {
+      assert.equal(r.ok, true);
+      assert.equal(r.occludedFallback, true);
+    }
+  });
+
+  await t.test('kae_kiat_right fails when crossing left arm is occluded but wrists reach leftwards (wrong direction)', () => {
+    const lm = makeSidePoseLandmarks({ isLeft: false, crossVis: 0.2, frontVis: 1.0, wristReachingCorrectSide: false });
+    const res = evaluatePose(poses.kae_kiat_right, lm);
+    assert.equal(res.allCorrect, false, 'Pose must fail when wrists reach wrong direction');
+  });
+
+  await t.test('kae_kiat_right fails when crossing left arm is occluded but front right elbow is bent', () => {
+    const lm = makeSidePoseLandmarks({ isLeft: false, crossVis: 0.2, frontVis: 1.0, frontElbowBent: true, wristReachingCorrectSide: true });
+    const res = evaluatePose(poses.kae_kiat_right, lm);
+    assert.equal(res.allCorrect, false, 'Pose must fail when front arm violates angle');
+  });
+
+  await t.test('Baseline poses (t_pose, arms_up, kae_kiat_forward) never activate occlusion fallback', () => {
+    const baselinePoses = ['t_pose', 'arms_up', 'arms_down', 'kae_kiat_prep', 'kae_kiat_forward', 'kae_kiat_upward'];
+    for (const poseKey of baselinePoses) {
+      const pose = poses[poseKey];
+      const lm = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, z: 0, visibility: 0.2 }));
+      const res = evaluatePose(pose, lm);
+      assert.equal(res.allCorrect, false, `Baseline pose ${poseKey} must fail on low visibility without fallback`);
+      for (const r of res.results) {
+        assert.notEqual(r.occludedFallback, true, `${poseKey} must not have occludedFallback`);
+      }
+    }
+  });
+});

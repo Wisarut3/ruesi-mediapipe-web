@@ -19,8 +19,10 @@ let lastSpokenAt = 0;
 const TTS_DEBOUNCE_MS = 3000;
 
 // Pose Hold Timer State (R1, R2, R3)
+const GRACE_PERIOD_MS = 450;
 let targetHoldDuration = 10;
 let holdStartTime = null;
+let lastFormBreakTime = null;
 let isHolding = false;
 let isCompleted = false;
 let autoAdvanceEnabled = false;
@@ -56,6 +58,26 @@ const poseRefCaptionEl     = typeof document !== 'undefined' ? document.getEleme
 const poseRefHudEl         = typeof document !== 'undefined' ? (document.getElementById('pose-guide-pip') || document.getElementById('pose-ref-hud')) : null;
 const refHudImgEl          = typeof document !== 'undefined' ? (document.getElementById('pose-guide-img') || document.getElementById('ref-hud-img')) : null;
 const poseGuidePipToggleEl = typeof document !== 'undefined' ? document.getElementById('pose-guide-pip-toggle') : null;
+const poseGuidanceTipEl    = typeof document !== 'undefined' ? (document.getElementById('pose-guidance-tip') || document.querySelector('.pose-guidance-tip')) : null;
+
+// Contextual Guidance Tip Configuration (R4)
+const ANGLED_GUIDANCE_POSES = ['kae_kiat_forward', 'kae_kiat_left', 'kae_kiat_right'];
+const GUIDANCE_TIP_TEXT = '💡 คำแนะนำ: ยืนเอียงเฉียง 30°–45° กับกล้อง เพื่อให้กล้องจับความยาวแขนได้ชัดเจนที่สุด';
+
+function updateGuidanceTipUI(poseKey) {
+  const el = (typeof document !== 'undefined' && (document.getElementById('pose-guidance-tip') || document.querySelector('.pose-guidance-tip'))) || poseGuidanceTipEl;
+  if (!el) return;
+
+  if (ANGLED_GUIDANCE_POSES.includes(poseKey)) {
+    el.textContent = GUIDANCE_TIP_TEXT;
+    el.style.display = 'flex';
+    if (el.classList) el.classList.remove('hidden');
+  } else {
+    el.textContent = '';
+    el.style.display = 'none';
+    if (el.classList) el.classList.add('hidden');
+  }
+}
 
 // ─── Load Poses ───────────────────────────────────────────────────────────────
 if (typeof fetch === 'function') {
@@ -217,12 +239,14 @@ function selectPose(key, btn) {
   updateTimerUI(0);
   updateHealthInfoUI(activePose);
   updateVisualReferenceUI(activePose);
+  updateGuidanceTipUI(selectedPoseKey);
 }
 
 // ─── Timer Functions (R1, R2, R3) ─────────────────────────────────────────────
 function resetHoldTimer() {
   isHolding = false;
   holdStartTime = null;
+  lastFormBreakTime = null;
 }
 
 function updateTimerUI(seconds) {
@@ -525,57 +549,76 @@ function evaluatePose(landmarks) {
   const pose = posesData[selectedPoseKey];
   if (!pose) return { allCorrect: false, feedbacks: [], results: [] };
 
+  const activePose = { ...pose, id: pose.id || selectedPoseKey, key: selectedPoseKey };
+  const evaluator = poseEvaluatorModule || (typeof PoseEvaluator !== 'undefined' ? PoseEvaluator : null);
+
   let allCorrect = true;
+  let feedbacks = [];
+  let results = [];
+
+  if (evaluator && typeof evaluator.evaluatePose === 'function') {
+    const evalRes = evaluator.evaluatePose(activePose, landmarks);
+    allCorrect = evalRes.allCorrect;
+    feedbacks = evalRes.feedbacks;
+    results = evalRes.results;
+  } else {
+    pose.rules.forEach(rule => {
+      const [ai, bi, ci] = rule.landmarks;
+      const A = landmarks[ai];
+      const B = landmarks[bi];
+      const C = landmarks[ci];
+      const lowVis = !A || !B || !C || A.visibility < 0.5 || B.visibility < 0.5 || C.visibility < 0.5;
+      if (lowVis) {
+        results.push({ rule, ok: false, lowVis: true, angle: null, feedback: 'ไม่เห็นชัด' });
+        allCorrect = false;
+        return;
+      }
+      const angle = calcAngle(A, B, C);
+      const ok = angle >= rule.min && angle <= rule.max;
+      const feedback = ok ? null : (angle < rule.min ? rule.feedback_low : rule.feedback_high);
+      results.push({ rule, ok, lowVis: false, angle, feedback });
+      if (!ok) {
+        allCorrect = false;
+        if (feedback) feedbacks.push(feedback);
+      }
+    });
+  }
+
   const overlayChips = [];
   const listRows = [];
-  const feedbacks = [];
-  const results = [];
 
-  pose.rules.forEach(rule => {
-    const res = (typeof PoseEvaluator !== 'undefined' && PoseEvaluator.evaluateRule)
-      ? PoseEvaluator.evaluateRule(rule, landmarks)
-      : (() => {
-          const [ai, bi, ci] = rule.landmarks;
-          const A = landmarks[ai];
-          const B = landmarks[bi];
-          const C = landmarks[ci];
-          const lowVis = !A || !B || !C || A.visibility < 0.5 || B.visibility < 0.5 || C.visibility < 0.5;
-          if (lowVis) return { rule, ok: false, lowVis: true, angle: null, feedback: 'ไม่เห็นชัด' };
-          const angle = calcAngle(A, B, C);
-          const ok = angle >= rule.min && angle <= rule.max;
-          return { rule, ok, lowVis: false, angle, feedback: ok ? null : (angle < rule.min ? rule.feedback_low : rule.feedback_high) };
-        })();
-
-    results.push(res);
-
-    if (res.lowVis) {
+  results.forEach(res => {
+    const rule = res.rule;
+    if (res.occludedFallback) {
+      overlayChips.push(`<div class="chip ok">${rule.label}: บังลำตัว (ผ่าน)</div>`);
+      listRows.push(`<div class="row ok"><span class="key">${rule.label}</span><span class="val">ผ่าน (ประเมินแขนหน้า)</span></div>`);
+    } else if (res.lowVis) {
       overlayChips.push(`<div class="chip low-vis">${rule.label}: ?°</div>`);
       listRows.push(`<div class="row"><span class="key">${rule.label}</span><span class="val">ไม่เห็นชัด</span></div>`);
-      allCorrect = false;
-      return;
+    } else {
+      const cls = res.ok ? 'ok' : 'bad';
+      overlayChips.push(`<div class="chip ${cls}">${rule.label}: ${res.angle}°</div>`);
+      listRows.push(`<div class="row ${cls}"><span class="key">${rule.label}</span><span class="val">${res.angle}° <small>(${rule.min}–${rule.max})</small></span></div>`);
     }
-
-    if (!res.ok) {
-      allCorrect = false;
-      if (res.feedback) {
-        feedbacks.push(res.feedback);
-      }
-    }
-
-    const cls = res.ok ? 'ok' : 'bad';
-    overlayChips.push(`<div class="chip ${cls}">${rule.label}: ${res.angle}°</div>`);
-    listRows.push(`<div class="row ${cls}"><span class="key">${rule.label}</span><span class="val">${res.angle}° <small>(${rule.min}–${rule.max})</small></span></div>`);
   });
 
   // Update overlays
   if (angleOverlayEl) angleOverlayEl.innerHTML = overlayChips.join('');
   if (angleListEl) angleListEl.innerHTML = listRows.join('');
 
-  // Update status card & hold timer logic (R1, R2, R3)
+  // Update status card & hold timer logic with Anti-Jitter Grace Period (R1, R2, R3)
+  const now = Date.now();
+
   if (allCorrect) {
+    if (lastFormBreakTime !== null) {
+      if (holdStartTime !== null) {
+        holdStartTime += (now - lastFormBreakTime);
+      }
+      lastFormBreakTime = null;
+    }
+
     if (!isCompleted) {
       if (statusCardEl) statusCardEl.className = 'status-card correct';
-      const now = Date.now();
       if (!isHolding) {
         isHolding = true;
         holdStartTime = now;
@@ -587,6 +630,7 @@ function evaluatePose(landmarks) {
       if (elapsed >= effectiveDuration) {
         isCompleted = true;
         isHolding = false;
+        lastFormBreakTime = null;
         onPoseComplete();
       } else {
         const msg = `ท่าทางถูกต้อง! ค้างท่าไว้ ${effectiveDuration} วินาที และหายใจเข้า-ออกช้าๆ`;
@@ -599,6 +643,25 @@ function evaluatePose(landmarks) {
       updateTimerUI(effectiveDuration);
     }
   } else {
+    // Check if grace period applies to active hold
+    if (isHolding && !isCompleted) {
+      if (lastFormBreakTime === null) {
+        lastFormBreakTime = now;
+      }
+      const breakDuration = now - lastFormBreakTime;
+      if (breakDuration <= GRACE_PERIOD_MS) {
+        if (statusCardEl) statusCardEl.className = 'status-card correct';
+        const heldSeconds = holdStartTime !== null ? (lastFormBreakTime - holdStartTime) / 1000 : 0;
+        updateTimerUI(heldSeconds);
+        return {
+          allCorrect,
+          feedbacks,
+          results
+        };
+      }
+    }
+
+    // Grace period expired or not holding: reset immediately
     if (statusCardEl) statusCardEl.className = 'status-card incorrect';
     resetHoldTimer();
     isCompleted = false;
@@ -812,6 +875,10 @@ if (typeof module !== 'undefined' && module.exports) {
     updateTimerUI,
     updateHealthInfoUI,
     updateVisualReferenceUI,
+    updateGuidanceTipUI,
+    ANGLED_GUIDANCE_POSES,
+    GUIDANCE_TIP_TEXT,
+    GRACE_PERIOD_MS,
     openZoomModal,
     closeZoomModal,
     setZoomScale,
@@ -826,11 +893,13 @@ if (typeof module !== 'undefined' && module.exports) {
       lastSpokenAt,
       targetHoldDuration,
       holdStartTime,
+      lastFormBreakTime,
       isHolding,
       isCompleted,
       autoAdvanceEnabled,
       autoAdvanceTimer,
       completedPoses,
+      GRACE_PERIOD_MS,
     }),
     setState: (updates) => {
       if (updates.selectedPoseKey !== undefined) selectedPoseKey = updates.selectedPoseKey;
@@ -839,6 +908,7 @@ if (typeof module !== 'undefined' && module.exports) {
       if (updates.lastSpokenAt !== undefined) lastSpokenAt = updates.lastSpokenAt;
       if (updates.targetHoldDuration !== undefined) targetHoldDuration = updates.targetHoldDuration;
       if (updates.holdStartTime !== undefined) holdStartTime = updates.holdStartTime;
+      if (updates.lastFormBreakTime !== undefined) lastFormBreakTime = updates.lastFormBreakTime;
       if (updates.isHolding !== undefined) isHolding = updates.isHolding;
       if (updates.isCompleted !== undefined) isCompleted = updates.isCompleted;
       if (updates.autoAdvanceEnabled !== undefined) autoAdvanceEnabled = updates.autoAdvanceEnabled;

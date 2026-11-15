@@ -127,6 +127,72 @@
       }
     }
 
+    if (allCorrect) {
+      return {
+        allCorrect,
+        feedbacks,
+        results
+      };
+    }
+
+    // Hybrid Occlusion-Aware & Directional Detection for Side Poses (R3)
+    const isLeftPose = (pose.id === 'kae_kiat_left') ||
+      (pose.key === 'kae_kiat_left') ||
+      (typeof pose.name === 'string' && (pose.name.includes('ดัดไปทางซ้าย') || pose.name.includes('kae_kiat_left')));
+    const isRightPose = (pose.id === 'kae_kiat_right') ||
+      (pose.key === 'kae_kiat_right') ||
+      (typeof pose.name === 'string' && (pose.name.includes('ดัดไปทางขวา') || pose.name.includes('kae_kiat_right')));
+
+    if ((isLeftPose || isRightPose) && landmarks && Array.isArray(landmarks) && landmarks.length >= 33) {
+      const frontPrefix = isLeftPose ? 'left' : 'right';
+      const crossPrefix = isLeftPose ? 'right' : 'left';
+
+      const frontResults = results.filter(r => r.rule && r.rule.id && r.rule.id.startsWith(frontPrefix));
+      const crossResults = results.filter(r => r.rule && r.rule.id && r.rule.id.startsWith(crossPrefix));
+
+      const frontOk = frontResults.length > 0 && frontResults.every(r => r.ok === true && !r.lowVis);
+      const crossOnlyOccluded = crossResults.length > 0 && crossResults.every(r => r.ok === true || r.lowVis === true);
+
+      if (frontOk && crossOnlyOccluded) {
+        const lShoulder = landmarks[11];
+        const rShoulder = landmarks[12];
+        const lHip = landmarks[23];
+        const rHip = landmarks[24];
+
+        let torsoCenterX = null;
+        if (lShoulder && rShoulder && Number.isFinite(lShoulder.x) && Number.isFinite(rShoulder.x)) {
+          const shoulderMidX = (lShoulder.x + rShoulder.x) / 2;
+          if (lHip && rHip && Number.isFinite(lHip.x) && Number.isFinite(rHip.x)) {
+            torsoCenterX = (shoulderMidX + (lHip.x + rHip.x) / 2) / 2;
+          } else {
+            torsoCenterX = shoulderMidX;
+          }
+        }
+
+        if (torsoCenterX !== null) {
+          const frontWristIdx = isLeftPose ? 15 : 16;
+          const frontWrist = landmarks[frontWristIdx];
+
+          if (frontWrist && Number.isFinite(frontWrist.x)) {
+            const directionalOk = isLeftPose
+              ? (frontWrist.x < torsoCenterX)
+              : (frontWrist.x > torsoCenterX);
+
+            if (directionalOk) {
+              allCorrect = true;
+              feedbacks.length = 0;
+              for (const cr of crossResults) {
+                if (cr.lowVis) {
+                  cr.ok = true;
+                  cr.occludedFallback = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     return {
       allCorrect,
       feedbacks,

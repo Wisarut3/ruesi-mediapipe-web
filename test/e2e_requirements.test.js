@@ -654,10 +654,15 @@ test('Tier 1: Feature Coverage (R4 - Zero Regression & Core Workflow)', async (t
       assert.equal(script.getState().isHolding, true, 'isHolding must start on first valid frame');
       assert.equal(script.getState().holdStartTime, 1000);
 
-      // Form break resets timer
+      // Form break initiates grace window (< 450ms)
       const invalidLandmarks = makeLandmarksWithAngle(30, 30);
       script.evaluatePose(invalidLandmarks);
-      assert.equal(script.getState().isHolding, false, 'isHolding must be false on form break');
+      assert.equal(script.getState().isHolding, true, 'isHolding must persist during grace window');
+
+      // Advancing past 450ms grace window resets timer
+      currTime = 1500; // 500ms into form break (>450ms)
+      script.evaluatePose(invalidLandmarks);
+      assert.equal(script.getState().isHolding, false, 'isHolding must be false on form break after grace period expires');
       assert.equal(script.getState().holdStartTime, null, 'holdStartTime must reset to null');
     } finally {
       Date.now = origDate;
@@ -1080,10 +1085,16 @@ test('Tier 2: Boundary & Corner Cases (F4 - Core Workflow Preservation)', async 
       script.evaluatePose(makeLandmarksWithAngle(90, 90));
       assert.equal(script.getState().isHolding, true);
 
-      // Frame at 2.95s fails
+      // Frame at 2.95s fails (50ms posture break within 450ms grace window)
       curr = 3950;
       script.evaluatePose(makeLandmarksWithAngle(45, 90));
-      assert.equal(script.getState().isHolding, false, 'Timer must immediately reset on form break');
+      assert.equal(script.getState().isHolding, true, 'Hold must persist during 50ms posture break within grace window');
+      assert.equal(script.getState().isCompleted, false, 'Pose must not be marked completed');
+
+      // Posture remains broken past 450ms grace window
+      curr = 4450; // 500ms after break started at 3950 (> 450ms)
+      script.evaluatePose(makeLandmarksWithAngle(45, 90));
+      assert.equal(script.getState().isHolding, false, 'Timer must reset to 0s after grace period expires');
       assert.equal(script.getState().isCompleted, false, 'Pose must not be marked completed');
     } finally {
       Date.now = orig;
@@ -1213,10 +1224,14 @@ test('Tier 3: Cross-Feature Combinations (Pairwise)', async (t) => {
       script.evaluatePose(makeLandmarksWithAngle(90, 90));
       assert.equal(script.getState().isHolding, true);
 
-      // Frame 3 at +2s: left arm fails -> red highlight & immediate timer reset
+      // Frame 3 at +2s: left arm fails -> red highlight; hold persists during grace, then resets after 450ms
       curr = 3000;
       script.evaluatePose(makeLandmarksWithAngle(40, 90));
-      assert.equal(script.getState().isHolding, false, 'Timer must reset on error highlight');
+      assert.equal(script.getState().isHolding, true, 'Hold persists during grace window');
+
+      curr = 3500; // 500ms > 450ms
+      script.evaluatePose(makeLandmarksWithAngle(40, 90));
+      assert.equal(script.getState().isHolding, false, 'Timer must reset on error highlight after grace window expires');
     } finally {
       Date.now = orig;
     }
@@ -1384,10 +1399,12 @@ test('Tier 4: Real-World Workload Scenarios', async (t) => {
       script.evaluatePose(makeLandmarksWithAngle(90, 90));
       assert.equal(script.getState().isHolding, true);
 
-      // Frame 2: Momentary occlusion (visibility = 0.3)
+      // Frame 2: Occlusion lasting > 450ms
       curr = 2000;
       script.evaluatePose(makeLandmarksWithAngle(90, 90, 0.3, 0.3));
-      assert.equal(script.getState().isHolding, false, 'Timer must reset on occlusion');
+      curr = 2500; // 500ms > 450ms grace period
+      script.evaluatePose(makeLandmarksWithAngle(90, 90, 0.3, 0.3));
+      assert.equal(script.getState().isHolding, false, 'Timer must reset on occlusion after grace period expires');
 
       // Frame 3: Visible but incorrect posture
       curr = 3000;

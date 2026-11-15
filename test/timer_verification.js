@@ -377,51 +377,120 @@ test('3. Immediate Timer Reset on Form Break, Landmark Loss, or Manual Switch (R
   Date.now = () => currentTime;
 
   try {
-    // 3a. Form Break (Angle out of bounds)
+    // 3a. Form Break & Grace Period Persistence (< 450ms)
     script.evaluatePose(validLandmarks);
     currentTime = 5000; // 4 seconds elapsed
     script.evaluatePose(validLandmarks);
     assert.equal(timerCount.textContent, 4);
 
-    // User drops left arm to 30° (below 70° min)
+    // User drops left arm to 30° (below min) at 6000ms (5s held)
     const badAngleLandmarks = makeLandmarksWithAngle(30, 90);
     currentTime = 6000;
     script.evaluatePose(badAngleLandmarks);
 
+    // At 6000ms: breakDuration = 0ms <= 450ms (Grace window active)
+    assert.equal(script.getState().isHolding, true, 'isHolding must remain true during grace period');
+    assert.equal(timerCount.textContent, 5, 'Timer countdown must be held at 5s during grace period');
+    assert.equal(statusCard.classList.contains('correct'), true, 'Status card must maintain green correct class during grace period');
+
+    // At 6200ms: 200ms into form break (< 450ms)
+    currentTime = 6200;
+    script.evaluatePose(badAngleLandmarks);
+    assert.equal(script.getState().isHolding, true, 'isHolding persists at 200ms into form break');
+    assert.equal(timerCount.textContent, 5, 'Timer countdown still held at 5s');
+
+    // At 6500ms: 500ms into form break (> 450ms grace period expires)
+    currentTime = 6500;
+    script.evaluatePose(badAngleLandmarks);
+
     const brokenState = script.getState();
-    assert.equal(brokenState.isHolding, false, 'isHolding must be false after form break');
+    assert.equal(brokenState.isHolding, false, 'isHolding must be false after grace period expires (>450ms)');
     assert.equal(brokenState.holdStartTime, null, 'holdStartTime must be reset to null');
     assert.equal(timerCount.textContent, 0, 'Timer count must immediately reset to 0');
     assert.equal(timerProgressBar.style.width, '0%', 'Timer progress bar must immediately reset to 0%');
     assert.equal(statusCard.classList.contains('incorrect'), true, 'Status card must indicate incorrect');
 
-    // 3b. Landmark Visibility Loss (< 0.5)
+    // 3b. Mid-Grace Recovery (Seamless Resumption Without Penalty)
     currentTime = 7000;
-    script.evaluatePose(validLandmarks); // start holding again
+    script.evaluatePose(validLandmarks); // start holding again (t=0)
     currentTime = 10000; // 3s hold
     script.evaluatePose(validLandmarks);
     assert.equal(timerCount.textContent, 3);
 
-    // Drop landmark visibility to 0.2
-    const lowVisLandmarks = makeLandmarksWithAngle(90, 90, 0.2, 1.0);
-    currentTime = 11000;
-    script.evaluatePose(lowVisLandmarks);
+    // Momentary posture dip at 10100ms
+    currentTime = 10100;
+    script.evaluatePose(badAngleLandmarks);
+    currentTime = 10300; // 200ms into break < 450ms
+    script.evaluatePose(badAngleLandmarks);
+    assert.equal(timerCount.textContent, 3);
 
-    assert.equal(script.getState().isHolding, false, 'Timer must reset when visibility < 0.5');
-    assert.equal(timerCount.textContent, 0, 'Timer display must be 0 on low visibility');
+    // Form re-corrected at 10350ms (250ms break < 450ms)
+    currentTime = 10350;
+    script.evaluatePose(validLandmarks);
+    assert.equal(script.getState().isHolding, true, 'isHolding stays true on mid-grace recovery');
+    assert.equal(script.getState().lastFormBreakTime, null, 'lastFormBreakTime cleared on recovery');
 
-    // 3c. Manual Pose Switch clears timer
+    // Hold continues to 11350ms (1 more second of good form)
+    currentTime = 11350;
+    script.evaluatePose(validLandmarks);
+    assert.equal(timerCount.textContent, 4, 'Timer resumes counting without penalty to 4s');
+
+    // 3c. Landmark Visibility Loss Exceeding Grace Window (< 0.5)
+    script.resetHoldTimer();
+    script.updateTimerUI(0);
+
     currentTime = 12000;
     script.evaluatePose(validLandmarks); // start holding
     currentTime = 15000; // 3s hold
     script.evaluatePose(validLandmarks);
     assert.equal(timerCount.textContent, 3);
 
-    // Switch pose to arms_up
+    // Drop landmark visibility to 0.2
+    const lowVisLandmarks = makeLandmarksWithAngle(90, 90, 0.2, 1.0);
+    currentTime = 16000;
+    script.evaluatePose(lowVisLandmarks);
+    assert.equal(script.getState().isHolding, true, 'isHolding persists during grace window on lowVis frame');
+
+    currentTime = 16500; // 500ms > 450ms grace
+    script.evaluatePose(lowVisLandmarks);
+    assert.equal(script.getState().isHolding, false, 'Timer must reset when visibility < 0.5 for >450ms');
+    assert.equal(timerCount.textContent, 0, 'Timer display must be 0 on low visibility expiration');
+
+    // 3d. Manual Pose Switch Clears Timer Immediately Without Grace Delay
+    script.resetHoldTimer();
+    script.updateTimerUI(0);
+
+    currentTime = 17000;
+    script.evaluatePose(validLandmarks); // start holding
+    currentTime = 20000; // 3s hold
+    script.evaluatePose(validLandmarks);
+    assert.equal(timerCount.textContent, 3);
+
+    // Form broken for 50ms
+    currentTime = 20050;
+    script.evaluatePose(badAngleLandmarks);
+    assert.equal(script.getState().isHolding, true);
+
+    // Switch pose to arms_up immediately during break
     script.selectPose('arms_up');
-    assert.equal(script.getState().isHolding, false, 'Manual pose selection must reset hold timer');
+    assert.equal(script.getState().isHolding, false, 'Manual pose selection must reset hold timer immediately');
+    assert.equal(script.getState().lastFormBreakTime, null, 'lastFormBreakTime cleared immediately');
     assert.equal(timerCount.textContent, 0, 'Timer display must be 0 on pose switch');
     assert.equal(statusCard.classList.contains('waiting'), true, 'Status card resets to waiting');
+
+    // 3e. Complete Person Loss Immediately Resets Timer Without Grace Delay
+    script.selectPose('t_pose');
+    currentTime = 21000;
+    script.evaluatePose(validLandmarks);
+    currentTime = 24000;
+    script.evaluatePose(validLandmarks);
+    assert.equal(timerCount.textContent, 3);
+
+    script.resetHoldTimer();
+    script.updateTimerUI(0);
+    assert.equal(script.getState().isHolding, false, 'Complete loss of person resets timer immediately');
+    assert.equal(script.getState().lastFormBreakTime, null);
+    assert.equal(timerCount.textContent, 0);
   } finally {
     Date.now = originalDateNow;
   }
@@ -695,4 +764,52 @@ test('8. Thai Health Information UI Dynamic Population & Updates (R3)', () => {
   assert.equal(cautionElderly.textContent, '-');
   assert.equal(cautionPregnant.textContent, '-');
   assert.equal(cautionGeneral.textContent, '-');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Test Suite 9: Contextual Positioning Guidance Tips UI (R4)
+// ─────────────────────────────────────────────────────────────────────────────
+test('9. Contextual Positioning Guidance Tips UI (R4)', async (t) => {
+  const env = createMockEnvironment();
+  global.document = env.mockDocument;
+  global.window = { speechSynthesis: env.mockSpeechSynthesis };
+  global.SpeechSynthesisUtterance = env.MockSpeechSynthesisUtterance;
+
+  delete require.cache[require.resolve('../public/script.js')];
+  const script = require('../public/script.js');
+
+  const guidanceTipEl = env.getOrCreateElement('pose-guidance-tip');
+
+  script.setState({
+    posesData,
+    selectedPoseKey: null
+  });
+
+  // 9a. Angled poses display the 30°–45° guidance badge
+  const angledPoses = ['kae_kiat_forward', 'kae_kiat_left', 'kae_kiat_right'];
+  for (const poseKey of angledPoses) {
+    script.selectPose(poseKey);
+    assert.equal(guidanceTipEl.style.display, 'flex', `Guidance tip badge must be visible (flex) for ${poseKey}`);
+    assert.ok(
+      guidanceTipEl.textContent.includes('30°–45°') && guidanceTipEl.textContent.includes('ยืนเอียงเฉียง'),
+      `Guidance tip text for ${poseKey} must contain 30°–45° positioning advice`
+    );
+  }
+
+  // 9b. Frontal poses hide the guidance badge
+  const frontalPoses = ['t_pose', 'arms_up', 'arms_down', 'kae_kiat_prep', 'kae_kiat_upward'];
+  for (const poseKey of frontalPoses) {
+    script.selectPose(poseKey);
+    assert.equal(guidanceTipEl.style.display, 'none', `Guidance tip badge must be hidden (none) for ${poseKey}`);
+    assert.equal(guidanceTipEl.textContent, '', `Guidance tip text must be empty for ${poseKey}`);
+  }
+
+  // 9c. Direct helper invocation
+  script.updateGuidanceTipUI('kae_kiat_left');
+  assert.equal(guidanceTipEl.style.display, 'flex');
+  assert.equal(guidanceTipEl.textContent, script.GUIDANCE_TIP_TEXT);
+
+  script.updateGuidanceTipUI('t_pose');
+  assert.equal(guidanceTipEl.style.display, 'none');
+  assert.equal(guidanceTipEl.textContent, '');
 });
