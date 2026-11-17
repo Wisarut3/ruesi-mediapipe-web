@@ -18,8 +18,13 @@ let ttsEnabled = false;
 let lastSpokenAt = 0;
 const TTS_DEBOUNCE_MS = 3000;
 
-// Dual-Engine AI State (MediaPipe Webcam vs Floaino ThingsBoard MQTT)
-let currentEngine = 'mediapipe'; // 'mediapipe' | 'floaino'
+// Floaino AI Configuration (Designated Up poses evaluate via Floaino ThingsBoard MQTT)
+const FLOAINO_UP_POSES = ['kae_kiat_upward', 'arms_up'];
+
+function isFloainoPose(poseKey) {
+  return Boolean(poseKey && FLOAINO_UP_POSES.includes(poseKey));
+}
+
 let socket = null;
 
 // Pose Hold Timer State (R1, R2, R3)
@@ -64,15 +69,8 @@ const refHudImgEl          = typeof document !== 'undefined' ? (document.getElem
 const poseGuidePipToggleEl = typeof document !== 'undefined' ? document.getElementById('pose-guide-pip-toggle') : null;
 const poseGuidanceTipEl    = typeof document !== 'undefined' ? (document.getElementById('pose-guidance-tip') || document.querySelector('.pose-guidance-tip')) : null;
 
-// Engine Switcher & Floaino Panel Refs
-const engineMediapipeBtn = typeof document !== 'undefined' ? document.getElementById('engine-mediapipe-btn') : null;
-const engineFloainoBtn   = typeof document !== 'undefined' ? document.getElementById('engine-floaino-btn') : null;
-const mqttStatusEl       = typeof document !== 'undefined' ? document.getElementById('mqtt-status') : null;
-const floainoCardEl      = typeof document !== 'undefined' ? document.getElementById('floaino-card') : null;
-const floainoConnBadgeEl = typeof document !== 'undefined' ? document.getElementById('floaino-conn-badge') : null;
-const floainoRawJsonEl   = typeof document !== 'undefined' ? document.getElementById('floaino-raw-json') : null;
-const floainoTimestampEl = typeof document !== 'undefined' ? document.getElementById('floaino-timestamp') : null;
-const floainoLogListEl   = typeof document !== 'undefined' ? document.getElementById('floaino-log-list') : null;
+// Floaino Panel Refs
+const mqttStatusEl = typeof document !== 'undefined' ? document.getElementById('mqtt-status') : null;
 
 // Contextual Guidance Tip Configuration (R4)
 const ANGLED_GUIDANCE_POSES = ['kae_kiat_forward', 'kae_kiat_left', 'kae_kiat_right'];
@@ -246,10 +244,36 @@ function selectPose(key, btn) {
   const activePose = (key && typeof key === 'object') ? key : (posesData ? posesData[key] : null);
 
   if (statusCardEl) statusCardEl.className = 'status-card waiting';
-  if (poseLabelEl) poseLabelEl.textContent = activePose ? activePose.name : (selectedPoseKey || '');
-  if (adviceEl) adviceEl.textContent = 'กำลังวิเคราะห์ท่าทาง...';
-  if (angleOverlayEl) angleOverlayEl.innerHTML = '';
-  if (angleListEl) angleListEl.innerHTML = '';
+  const poseName = activePose ? activePose.name : (selectedPoseKey || '');
+  if (poseLabelEl) {
+    if (isFloainoPose(selectedPoseKey)) {
+      poseLabelEl.innerHTML = `${escapeHtml(poseName)} <span class="badge-floaino">📡 ข้อมูลจาก Floaino AI</span>`;
+      poseLabelEl.textContent = `${poseName} 📡 ข้อมูลจาก Floaino AI`;
+    } else {
+      poseLabelEl.textContent = poseName;
+    }
+  }
+  if (adviceEl) {
+    if (isFloainoPose(selectedPoseKey)) {
+      adviceEl.textContent = 'รอรับสัญญาณมุมแขนจาก Floaino AI...';
+    } else {
+      adviceEl.textContent = 'กำลังวิเคราะห์ท่าทาง...';
+    }
+  }
+  if (angleOverlayEl) {
+    if (isFloainoPose(selectedPoseKey)) {
+      angleOverlayEl.innerHTML = '<div class="chip">📡 รอรับสัญญาณ Floaino...</div>';
+    } else {
+      angleOverlayEl.innerHTML = '';
+    }
+  }
+  if (angleListEl) {
+    if (isFloainoPose(selectedPoseKey)) {
+      angleListEl.innerHTML = '<div class="row"><span class="key">มุมแขน <span class="badge-floaino">📡 ข้อมูลจาก Floaino AI</span></span><span class="val">รอรับสัญญาณ...</span></div>';
+    } else {
+      angleListEl.innerHTML = '';
+    }
+  }
   updateTimerUI(0);
   updateHealthInfoUI(activePose);
   updateVisualReferenceUI(activePose);
@@ -727,7 +751,8 @@ if (typeof Pose !== 'undefined') {
       // Invert execution order: evaluate the pose before skeleton drawing
       const activePose = selectedPoseKey ? posesData[selectedPoseKey] : null;
       let evalResult = null;
-      if (selectedPoseKey && currentEngine === 'mediapipe') {
+      // Only evaluate via MediaPipe landmarks when NOT an Up pose (Up poses evaluate via Floaino)
+      if (selectedPoseKey && !isFloainoPose(selectedPoseKey)) {
         evalResult = evaluatePose(results.poseLandmarks);
       }
 
@@ -743,7 +768,7 @@ if (typeof Pose !== 'undefined') {
       ctx.restore();
     } else {
       ctx.restore();
-      if (selectedPoseKey && currentEngine === 'mediapipe') {
+      if (selectedPoseKey && !isFloainoPose(selectedPoseKey)) {
         if (angleOverlayEl) angleOverlayEl.innerHTML = '<div class="chip low-vis">ไม่พบตัวบุคคล</div>';
         resetHoldTimer();
         isCompleted = false;
@@ -878,84 +903,18 @@ if (typeof Camera !== 'undefined' && videoEl && pose) {
 
 // ─── Floaino AI & MQTT Engine ────────────────────────────────────────────────
 /**
- * Switch active posture evaluation engine between in-browser MediaPipe and Floaino MQTT stream.
- * @param {'mediapipe' | 'floaino'} engine
- */
-function setEngine(engine) {
-  if (engine !== 'mediapipe' && engine !== 'floaino') return;
-  currentEngine = engine;
-
-  const mediapipeBtn = (typeof document !== 'undefined' && document.getElementById('engine-mediapipe-btn')) || engineMediapipeBtn;
-  const floainoBtn = (typeof document !== 'undefined' && document.getElementById('engine-floaino-btn')) || engineFloainoBtn;
-  const camStatus = (typeof document !== 'undefined' && document.getElementById('camera-status')) || cameraStatusEl;
-  const mqttStatus = (typeof document !== 'undefined' && document.getElementById('mqtt-status')) || mqttStatusEl;
-  const floainoCard = (typeof document !== 'undefined' && document.getElementById('floaino-card')) || floainoCardEl;
-
-  if (mediapipeBtn) {
-    if (mediapipeBtn.classList) mediapipeBtn.classList.toggle('active', engine === 'mediapipe');
-    if (typeof mediapipeBtn.setAttribute === 'function') mediapipeBtn.setAttribute('aria-checked', String(engine === 'mediapipe'));
-  }
-  if (floainoBtn) {
-    if (floainoBtn.classList) floainoBtn.classList.toggle('active', engine === 'floaino');
-    if (typeof floainoBtn.setAttribute === 'function') floainoBtn.setAttribute('aria-checked', String(engine === 'floaino'));
-  }
-
-  if (engine === 'mediapipe') {
-    if (camStatus) camStatus.style.display = '';
-    if (mqttStatus) mqttStatus.style.display = 'none';
-    if (floainoCard) floainoCard.style.display = 'none';
-  } else {
-    // floaino engine mode
-    if (camStatus) camStatus.style.display = 'none';
-    if (mqttStatus) mqttStatus.style.display = '';
-    if (floainoCard) floainoCard.style.display = 'block';
-
-    // Auto-select single target pose if none selected (default: authentic kae_kiat_forward)
-    if (!selectedPoseKey && posesData) {
-      const defaultKey = 'kae_kiat_forward';
-      const targetKey = posesData[defaultKey] ? defaultKey : Object.keys(posesData)[0];
-      if (targetKey) {
-        const defaultBtn = typeof document !== 'undefined' && typeof document.querySelector === 'function'
-          ? document.querySelector(`.pose-btn[data-pose-key="${targetKey}"]`)
-          : null;
-        selectPose(targetKey, defaultBtn);
-      }
-    }
-  }
-
-  resetHoldTimer();
-  isCompleted = false;
-  updateTimerUI(0);
-}
-
-// Bind engine switch buttons
-if (engineMediapipeBtn && typeof engineMediapipeBtn.addEventListener === 'function') {
-  engineMediapipeBtn.addEventListener('click', () => setEngine('mediapipe'));
-}
-if (engineFloainoBtn && typeof engineFloainoBtn.addEventListener === 'function') {
-  engineFloainoBtn.addEventListener('click', () => setEngine('floaino'));
-}
-
-/**
- * Updates MQTT status badges in header and panel.
+ * Updates MQTT status badges if present in DOM.
  * @param {{ connected: boolean, token?: string, error?: string }} status
  */
 function updateMqttStatusUI(status) {
   const mqttEl = (typeof document !== 'undefined' && document.getElementById('mqtt-status')) || mqttStatusEl;
-  const badgeEl = (typeof document !== 'undefined' && document.getElementById('floaino-conn-badge')) || floainoConnBadgeEl;
   const isConn = Boolean(status && status.connected);
-
   const text = isConn ? '📡 MQTT: เชื่อมต่อแล้ว' : '❌ MQTT: รอเชื่อมต่อ...';
-  const badgeText = isConn ? 'เชื่อมต่อสำเร็จ' : 'รอเชื่อมต่อ...';
   const cls = isConn ? 'badge connected' : 'badge disconnected';
 
   if (mqttEl) {
     mqttEl.textContent = text;
     mqttEl.className = cls;
-  }
-  if (badgeEl) {
-    badgeEl.textContent = badgeText;
-    badgeEl.className = cls;
   }
 }
 
@@ -1006,29 +965,23 @@ function parseFloainoValue(rawVal) {
 }
 
 /**
- * Evaluates incoming Floaino packet, updates UI inspector and log stream,
- * and if Floaino is active engine, drives hold timer, advice, overlays, and TTS.
+ * Evaluates incoming Floaino packet.
+ * Only processes messages when a designated Up pose is selected (kae_kiat_upward or arms_up).
+ * Discards and ignores messages for all other poses.
+ * Drives posture correctness (150°–180°), hold timer progress, and Thai audio coaching.
+ *
  * @param {{ timestamp?: string, topic?: string, data?: any }} packet
  */
 function handleFloainoPacket(packet) {
-  if (!packet) return null;
+  if (!packet || !isFloainoPose(selectedPoseKey)) {
+    return null; // Ignore / discard Floaino packets when non-Up pose is selected
+  }
 
   const timestamp = packet.timestamp || (typeof Date !== 'undefined' ? new Date().toLocaleTimeString('th-TH') : '');
-  const topic = packet.topic || 'v1/devices/me/attributes';
   const data = packet.data !== undefined ? packet.data : packet;
 
-  // 1. Raw JSON UI Update
-  const rawEl = (typeof document !== 'undefined' && document.getElementById('floaino-raw-json')) || floainoRawJsonEl;
-  const timeEl = (typeof document !== 'undefined' && document.getElementById('floaino-timestamp')) || floainoTimestampEl;
-  if (rawEl) {
-    rawEl.textContent = (typeof data === 'object' && data !== null) ? JSON.stringify(data, null, 2) : String(data);
-  }
-  if (timeEl) {
-    timeEl.textContent = timestamp;
-  }
-
-  // 2. Extract key and value
-  let key = 'Floaino';
+  // Extract key and value
+  let key = 'Arm';
   let rawVal = data;
 
   if (typeof data === 'object' && data !== null) {
@@ -1041,141 +994,93 @@ function handleFloainoPacket(packet) {
 
   const parsed = parseFloainoValue(rawVal);
 
-  // 3. Evaluation logic (Targeting one representative pose: kae_kiat_forward)
-  const defaultPoseKey = 'kae_kiat_forward';
-  const activePoseKey = selectedPoseKey || defaultPoseKey;
-  const activePose = (posesData && posesData[activePoseKey]) ? posesData[activePoseKey] : null;
-
+  // Up Pose evaluation logic (Sole decider: Arm angle 150°–180°)
+  const targetMin = 150;
+  const targetMax = 180;
   let allCorrect = false;
   let feedback = '';
   let displayAngleText = parsed.text;
 
-  if (parsed.type === 'boolean') {
-    allCorrect = parsed.ok;
-    if (allCorrect) {
-      feedback = `ท่าทางถูกต้องตามเซนเซอร์ Floaino AI (${key}: ${parsed.text})`;
-    } else {
-      feedback = `Floaino ตรวจพบท่าทางยังไม่ถูกต้อง (${key}: ${parsed.text})`;
-    }
-  } else if (parsed.type === 'number') {
+  if (parsed.type === 'number') {
     const angle = parsed.value;
-    let targetMin = 125;
-    let targetMax = 180;
-    let targetLabel = 'ระดับแขน';
-    let feedbackLow = 'เหยียดแขนตรงไปข้างหน้าอีก';
-    let feedbackHigh = 'ปรับระดับแขนให้อยู่ในแนวตรงขนานพื้น';
-
-    if (activePose && Array.isArray(activePose.rules) && activePose.rules.length > 0) {
-      const lowerKey = key.toLowerCase();
-      let matchedRule = null;
-
-      if (lowerKey.includes('elevation') || lowerKey.includes('ระดับ')) {
-        matchedRule = activePose.rules.find(r => (r.label || '').includes('ระดับ') || (r.id || '').includes('arm'));
-      } else {
-        // By default for Arm/Elbow/Angle in Floaino, evaluate arm straightness / extension (e.g. 125°–180°)
-        matchedRule = activePose.rules.find(r => (r.label || '').includes('ศอก') || r.min >= 120) || activePose.rules[0];
-      }
-
-      if (matchedRule) {
-        targetMin = matchedRule.min;
-        targetMax = matchedRule.max;
-        targetLabel = matchedRule.label || targetLabel;
-        if (matchedRule.feedback_low) feedbackLow = matchedRule.feedback_low;
-        if (matchedRule.feedback_high) feedbackHigh = matchedRule.feedback_high;
-      }
-    }
+    displayAngleText = `${angle}° (${targetMin}–${targetMax}°)`;
 
     if (angle >= targetMin && angle <= targetMax) {
       allCorrect = true;
-      displayAngleText = `${angle}° (${targetMin}–${targetMax}°)`;
-      feedback = `มุม ${targetLabel}: ${angle}° ถูกต้องตามเกณฑ์ (${targetMin}–${targetMax}°)`;
+      feedback = `มุมแขน ${angle}° ถูกต้องตามเกณฑ์ (${targetMin}–${targetMax}°)`;
+    } else if (angle < targetMin) {
+      allCorrect = false;
+      feedback = `ชูแขนขึ้นเหนือศีรษะให้สุดแนบใบหู (มุมปัจจุบัน: ${angle}°, เกณฑ์: ${targetMin}–${targetMax}°)`;
     } else {
       allCorrect = false;
-      displayAngleText = `${angle}° (${targetMin}–${targetMax}°)`;
-      feedback = angle < targetMin
-        ? `${feedbackLow} (มุมปัจจุบัน: ${angle}°, เกณฑ์: ${targetMin}–${targetMax}°)`
-        : `${feedbackHigh} (มุมปัจจุบัน: ${angle}°, เกณฑ์: ${targetMin}–${targetMax}°)`;
+      feedback = `ลดแขนลงมาเล็กน้อยให้อยู่ในแนวตรง (มุมปัจจุบัน: ${angle}°, เกณฑ์: ${targetMin}–${targetMax}°)`;
     }
+  } else if (parsed.type === 'boolean') {
+    allCorrect = parsed.ok;
+    displayAngleText = parsed.ok ? '160° (150°–180°)' : '85° (150°–180°)';
+    feedback = allCorrect
+      ? `ชูแขนขึ้นเหนือศีรษะถูกต้องตามเกณฑ์ Floaino AI (${key}: ผ่าน)`
+      : `ชูแขนขึ้นเหนือศีรษะให้สุดแนบใบหู (${key}: ปรับท่า)`;
   } else {
     allCorrect = parsed.ok;
+    displayAngleText = parsed.text;
     feedback = allCorrect
-      ? `Floaino AI ตรวจจับท่าทางถูกต้อง (${key}: ${parsed.text})`
-      : `Floaino AI แจ้งเตือน: ปรับท่าทาง (${key}: ${parsed.text})`;
+      ? `ชูแขนขึ้นเหนือศีรษะถูกต้องตามเกณฑ์ Floaino AI (${key}: ผ่าน)`
+      : `ชูแขนขึ้นเหนือศีรษะให้สุดแนบใบหู (${key}: ปรับท่า)`;
   }
 
-  // 4. Update Live Log
-  const logList = (typeof document !== 'undefined' && document.getElementById('floaino-log-list')) || floainoLogListEl;
-  if (logList && typeof document !== 'undefined' && typeof document.createElement === 'function') {
-    const li = document.createElement('li');
-    li.className = `log-item ${allCorrect ? 'ok' : 'bad'}`;
-    li.innerHTML = `
-      <span class="log-time">${escapeHtml(timestamp)}</span>
-      <span class="log-key">${escapeHtml(key)}:</span>
-      <span class="log-val">${escapeHtml(parsed.text)}</span>
-      <span class="log-status-badge ${allCorrect ? 'ok' : 'bad'}">${allCorrect ? '✅ ผ่าน' : '❌ ปรับท่า'}</span>
-    `;
-    if (logList.insertBefore && logList.firstChild) {
-      logList.insertBefore(li, logList.firstChild);
-    } else if (logList.appendChild) {
-      logList.appendChild(li);
-    }
-    if (logList.children && logList.children.length > 20 && logList.removeChild && logList.lastChild) {
-      logList.removeChild(logList.lastChild);
-    }
+  // Update live angle readout & camera overlay with subtle Floaino badge
+  if (angleOverlayEl) {
+    const cls = allCorrect ? 'ok' : 'bad';
+    angleOverlayEl.innerHTML = `<div class="chip ${cls}">📡 Floaino: ${escapeHtml(displayAngleText)}</div>`;
+  }
+  if (angleListEl) {
+    const cls = allCorrect ? 'ok' : 'bad';
+    angleListEl.innerHTML = `<div class="row ${cls}"><span class="key">มุมแขน <span class="badge-floaino">📡 ข้อมูลจาก Floaino AI</span></span><span class="val">${escapeHtml(displayAngleText)} ${allCorrect ? '✅ ผ่าน' : '❌ ต้องปรับ'}</span></div>`;
   }
 
-  // 5. If Floaino is the active engine, drive the feedback UI and timer
-  if (currentEngine === 'floaino') {
-    if (!selectedPoseKey && defaultPoseKey) {
-      const defaultBtn = typeof document !== 'undefined' && typeof document.querySelector === 'function'
-        ? document.querySelector(`.pose-btn[data-pose-key="${defaultPoseKey}"]`)
-        : null;
-      selectPose(defaultPoseKey, defaultBtn);
-    }
+  // Update Status Card with subtle Floaino badge
+  const activePose = (posesData && posesData[selectedPoseKey]) ? posesData[selectedPoseKey] : null;
+  const poseName = activePose ? activePose.name : selectedPoseKey;
+  if (poseLabelEl) {
+    poseLabelEl.innerHTML = `${escapeHtml(poseName)} <span class="badge-floaino">📡 ข้อมูลจาก Floaino AI</span>`;
+    poseLabelEl.textContent = `${poseName} 📡 ข้อมูลจาก Floaino AI`;
+  }
 
-    if (angleOverlayEl) {
-      const cls = allCorrect ? 'ok' : 'bad';
-      angleOverlayEl.innerHTML = `<div class="chip ${cls}">📡 Floaino [${escapeHtml(key)}]: ${escapeHtml(displayAngleText)}</div>`;
-    }
-    if (angleListEl) {
-      const cls = allCorrect ? 'ok' : 'bad';
-      angleListEl.innerHTML = `<div class="row ${cls}"><span class="key">${escapeHtml(key)} (Floaino AI)</span><span class="val">${escapeHtml(displayAngleText)} ${allCorrect ? '✅ ผ่าน' : '❌ ต้องปรับ'}</span></div>`;
-    }
+  // Drive Hold Timer and Audio Coaching
+  const now = Date.now();
+  if (allCorrect) {
+    if (!isCompleted) {
+      if (statusCardEl) statusCardEl.className = 'status-card correct';
+      if (!isHolding) {
+        isHolding = true;
+        holdStartTime = now;
+      }
+      const elapsed = (now - holdStartTime) / 1000;
+      updateTimerUI(elapsed);
 
-    const now = Date.now();
-    if (allCorrect) {
-      if (!isCompleted) {
-        if (statusCardEl) statusCardEl.className = 'status-card correct';
-        if (!isHolding) {
-          isHolding = true;
-          holdStartTime = now;
-        }
-        const elapsed = (now - holdStartTime) / 1000;
-        updateTimerUI(elapsed);
-
-        const effectiveDuration = Math.max(1, targetHoldDuration || 3);
-        if (elapsed >= effectiveDuration) {
-          isCompleted = true;
-          isHolding = false;
-          onPoseComplete();
-        } else {
-          const msg = `${feedback} ค้างท่าไว้ ${effectiveDuration} วินาที`;
-          if (adviceEl) adviceEl.textContent = msg;
-          speak(msg);
-        }
+      const effectiveDuration = Math.max(1, targetHoldDuration || 3);
+      if (elapsed >= effectiveDuration) {
+        isCompleted = true;
+        isHolding = false;
+        onPoseComplete();
       } else {
-        if (statusCardEl) statusCardEl.className = 'status-card correct completed';
-        const effectiveDuration = Math.max(1, targetHoldDuration || 3);
-        updateTimerUI(effectiveDuration);
+        const msg = `${feedback} ค้างท่าไว้ ${effectiveDuration} วินาที และหายใจเข้า-ออกช้าๆ`;
+        if (adviceEl) adviceEl.textContent = msg;
+        speak(msg);
       }
     } else {
-      if (statusCardEl) statusCardEl.className = 'status-card incorrect';
-      resetHoldTimer();
-      isCompleted = false;
-      updateTimerUI(0);
-      if (adviceEl) adviceEl.textContent = feedback;
-      speak(feedback);
+      if (statusCardEl) statusCardEl.className = 'status-card correct completed';
+      const effectiveDuration = Math.max(1, targetHoldDuration || 3);
+      updateTimerUI(effectiveDuration);
     }
+  } else {
+    if (statusCardEl) statusCardEl.className = 'status-card incorrect';
+    resetHoldTimer();
+    isCompleted = false;
+    updateTimerUI(0);
+    if (adviceEl) adviceEl.textContent = feedback;
+    speak(feedback);
   }
 
   return {
@@ -1189,12 +1094,16 @@ function handleFloainoPacket(packet) {
 
 /**
  * Simulates incoming Floaino signals with stringified / quoted payloads.
- * Automatically activates Floaino engine mode if not already active.
+ * Auto-selects Up pose (kae_kiat_upward) if user has not selected an Up pose.
  * @param {'true' | 'false' | string} val
  */
 function simulateFloaino(val) {
-  if (currentEngine !== 'floaino') {
-    setEngine('floaino');
+  if (!isFloainoPose(selectedPoseKey)) {
+    const defaultUpPose = 'kae_kiat_upward';
+    const btn = typeof document !== 'undefined' && typeof document.querySelector === 'function'
+      ? document.querySelector(`.pose-btn[data-pose-key="${defaultUpPose}"]`)
+      : null;
+    selectPose(defaultUpPose, btn);
   }
 
   let payload;
@@ -1218,7 +1127,6 @@ function simulateFloaino(val) {
 
 if (typeof window !== 'undefined') {
   window.simulateFloaino = simulateFloaino;
-  window.setEngine = setEngine;
 }
 
 // ─── Socket.IO Real-time Connection ───────────────────────────────────────────
@@ -1267,8 +1175,10 @@ if (typeof module !== 'undefined' && module.exports) {
     onPoseComplete,
     renderPoseButtons,
     // Floaino Exports
-    setEngine,
-    getEngine: () => currentEngine,
+    FLOAINO_UP_POSES,
+    isFloainoPose,
+    setEngine: (engine) => {},
+    getEngine: () => isFloainoPose(selectedPoseKey) ? 'floaino' : 'mediapipe',
     stripQuotes,
     parseFloainoValue,
     handleFloainoPacket,
@@ -1288,7 +1198,7 @@ if (typeof module !== 'undefined' && module.exports) {
       autoAdvanceTimer,
       completedPoses,
       GRACE_PERIOD_MS,
-      currentEngine,
+      currentEngine: isFloainoPose(selectedPoseKey) ? 'floaino' : 'mediapipe',
       socket,
     }),
     setState: (updates) => {
@@ -1303,7 +1213,6 @@ if (typeof module !== 'undefined' && module.exports) {
       if (updates.isCompleted !== undefined) isCompleted = updates.isCompleted;
       if (updates.autoAdvanceEnabled !== undefined) autoAdvanceEnabled = updates.autoAdvanceEnabled;
       if (updates.autoAdvanceTimer !== undefined) autoAdvanceTimer = updates.autoAdvanceTimer;
-      if (updates.currentEngine !== undefined) currentEngine = updates.currentEngine;
       if (updates.socket !== undefined) socket = updates.socket;
     }
   };

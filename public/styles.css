@@ -25,35 +25,6 @@ header {
   flex-wrap: wrap;
 }
 
-/* AI Engine Switcher */
-.engine-switch-group {
-  display: inline-flex;
-  background: #090d16;
-  padding: 0.2rem;
-  border-radius: 999px;
-  border: 1px solid #334155;
-  gap: 0.2rem;
-}
-.engine-btn {
-  background: transparent;
-  border: none;
-  color: #94a3b8;
-  padding: 0.35rem 0.85rem;
-  border-radius: 999px;
-  font-size: 0.82rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.engine-btn:hover {
-  color: #f8fafc;
-}
-.engine-btn.active {
-  background: #38bdf8;
-  color: #0f172a;
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
-}
-
 h1 { font-size: 1.3rem; color: #38bdf8; }
 .version-tag {
   font-size: 0.7rem; background: #1d4ed8; color: #bfdbfe;
@@ -969,75 +940,26 @@ main { display: grid; grid-template-columns: 1fr 380px; flex: 1; overflow: hidde
   color: #94a3b8;
 }
 
-/* Floaino AI Monitor Card */
-.floaino-card {
-  background: #0f172a;
-  border: 1px solid rgba(56, 189, 248, 0.4);
-  border-radius: 12px;
-  padding: 1rem 1.1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  animation: fadeIn 0.25s ease;
-}
-
-.floaino-header {
-  display: flex;
-  justify-content: space-between;
+/* Floaino AI Badge */
+.badge-floaino {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.floaino-subtitle {
-  color: #94a3b8;
-  font-size: 0.75rem;
-  margin-top: 0.15rem;
-}
-
-.floaino-subtitle code {
+  gap: 0.35rem;
+  background: rgba(56, 189, 248, 0.15);
   color: #38bdf8;
-  background: rgba(56, 189, 248, 0.1);
-  padding: 0.1rem 0.35rem;
-  border-radius: 4px;
-}
-
-.floaino-payload-box {
-  background: #090d16;
-  border: 1px solid #1e293b;
-  border-radius: 8px;
-  padding: 0.75rem;
-}
-
-.payload-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.4rem;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
   font-size: 0.75rem;
-}
-
-.payload-title {
-  color: #94a3b8;
   font-weight: 600;
+  vertical-align: middle;
 }
 
-.payload-time {
-  color: #38bdf8;
-  font-family: monospace;
-}
-
-#floaino-raw-json {
-  color: #38bdf8;
-  background: transparent;
-  font-family: monospace;
-  font-size: 0.85rem;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 120px;
-  overflow-y: auto;
-  margin: 0;
-  padding: 0;
+/* Compact Floaino Simulation Row inside Debug Panel */
+.debug-sim-box {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #1e293b;
 }
 
 .floaino-sim-box {
@@ -1092,38 +1014,6 @@ main { display: grid; grid-template-columns: 1fr 380px; flex: 1; overflow: hidde
 .btn-sim.warning {
   background: #f59e0b;
   color: #451a03;
-}
-
-.floaino-log-box {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.log-title {
-  font-size: 0.72rem;
-  color: #94a3b8;
-  font-weight: 600;
-}
-
-.floaino-log-list {
-  list-style: none;
-  max-height: 110px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0;
-}
-
-.floaino-log-list li {
-  background: #090d16;
-  padding: 0.35rem 0.6rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-family: monospace;
-  color: #94a3b8;
-  border-left: 2px solid #38bdf8;
 }
 
 /* Responsive */

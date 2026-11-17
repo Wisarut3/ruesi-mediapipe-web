@@ -43,8 +43,8 @@ function createMockFloainoEnv() {
     constructor(id, tagName = 'div') {
       this.id = id || '';
       this.tagName = tagName.toUpperCase();
-      this.textContent = '';
-      this.innerHTML = '';
+      this._textContent = '';
+      this._innerHTML = '';
       this.className = '';
       this.classList = new MockClassList();
       this.style = {};
@@ -52,6 +52,24 @@ function createMockFloainoEnv() {
       this.children = [];
       this.firstChild = null;
       this.lastChild = null;
+    }
+
+    get textContent() {
+      return this._textContent;
+    }
+    set textContent(val) {
+      this._textContent = String(val);
+      if (!this._innerHTML) {
+        this._innerHTML = String(val);
+      }
+    }
+
+    get innerHTML() {
+      return this._innerHTML;
+    }
+    set innerHTML(val) {
+      this._innerHTML = String(val);
+      this._textContent = String(val).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
     setAttribute(name, val) {
@@ -116,15 +134,8 @@ function createMockFloainoEnv() {
   }
 
   // Pre-seed DOM elements needed for Floaino & core script
-  getOrCreateElement('engine-mediapipe-btn', 'button');
-  getOrCreateElement('engine-floaino-btn', 'button');
   getOrCreateElement('camera-status', 'div');
   getOrCreateElement('mqtt-status', 'div');
-  getOrCreateElement('floaino-card', 'div');
-  getOrCreateElement('floaino-conn-badge', 'span');
-  getOrCreateElement('floaino-timestamp', 'span');
-  getOrCreateElement('floaino-raw-json', 'pre');
-  getOrCreateElement('floaino-log-list', 'ul');
   getOrCreateElement('status-card', 'div');
   getOrCreateElement('pose-label', 'div');
   getOrCreateElement('advice', 'div');
@@ -210,129 +221,203 @@ test('Floaino AI & MQTT Integration Suite', async (t) => {
     assert.equal(num85.value, 85);
   });
 
-  await t.test('3. Engine Switcher Mechanics (setEngine)', () => {
-    // Initial state is mediapipe
-    assert.equal(app.getEngine(), 'mediapipe');
+  await t.test('3. Clean UI Layout Verification (No manual engine switcher, compact simulation preserved)', () => {
+    const htmlPath = path.join(__dirname, '..', 'public', 'index.html');
+    const cssPath = path.join(__dirname, '..', 'public', 'styles.css');
+    const html = fs.readFileSync(htmlPath, 'utf8');
+    const css = fs.readFileSync(cssPath, 'utf8');
 
-    // Switch to Floaino
-    app.setEngine('floaino');
-    assert.equal(app.getEngine(), 'floaino');
+    // Manual switcher and large card removed
+    assert.equal(html.includes('engine-switch-group'), false, 'index.html must not contain engine-switch-group');
+    assert.equal(html.includes('engine-mediapipe-btn'), false, 'index.html must not contain engine-mediapipe-btn');
+    assert.equal(html.includes('engine-floaino-btn'), false, 'index.html must not contain engine-floaino-btn');
+    assert.equal(html.includes('id="floaino-card"'), false, 'index.html must not contain large floaino-card');
+    assert.equal(css.includes('.engine-switch-group'), false, 'styles.css must not contain .engine-switch-group');
 
-    const camEl = env.getElement('camera-status');
-    const mqttEl = env.getElement('mqtt-status');
-    const cardEl = env.getElement('floaino-card');
-
-    assert.equal(camEl.style.display, 'none');
-    assert.equal(mqttEl.style.display, '');
-    assert.equal(cardEl.style.display, 'block');
-
-    // Switch back to MediaPipe
-    app.setEngine('mediapipe');
-    assert.equal(app.getEngine(), 'mediapipe');
-    assert.equal(camEl.style.display, '');
-    assert.equal(mqttEl.style.display, 'none');
-    assert.equal(cardEl.style.display, 'none');
+    // Compact simulation controls retained inside debug panel
+    assert.ok(html.includes('debug-sim-box'), 'index.html must contain compact debug-sim-box');
+    assert.ok(html.includes('simulateFloaino'), 'index.html must contain simulateFloaino buttons');
+    assert.ok(css.includes('.badge-floaino'), 'styles.css must define .badge-floaino');
   });
 
-  await t.test('4. MQTT Status UI Updates (updateMqttStatusUI)', () => {
-    app.updateMqttStatusUI({ connected: true });
-    const mqttEl = env.getElement('mqtt-status');
-    const badgeEl = env.getElement('floaino-conn-badge');
+  await t.test('4. Selective Processing: Floaino Packets Dropped When Non-Up Pose is Selected', () => {
+    // Test with various non-up poses
+    const nonUpPoses = ['t_pose', 'kae_kiat_forward', 'arms_down', 'kae_kiat_prep'];
 
-    assert.ok(mqttEl.textContent.includes('เชื่อมต่อแล้ว'));
-    assert.equal(mqttEl.className, 'badge connected');
-    assert.equal(badgeEl.className, 'badge connected');
+    for (const poseKey of nonUpPoses) {
+      app.selectPose(poseKey);
+      assert.equal(app.isFloainoPose(poseKey), false, `${poseKey} must not be a Floaino pose`);
+      assert.equal(app.getEngine(), 'mediapipe', `Engine must be mediapipe for ${poseKey}`);
 
-    app.updateMqttStatusUI({ connected: false });
-    assert.ok(mqttEl.textContent.includes('รอเชื่อมต่อ'));
-    assert.equal(mqttEl.className, 'badge disconnected');
+      const adviceBefore = env.getElement('advice').textContent;
+
+      // Send correct Floaino packet
+      const res = app.handleFloainoPacket({
+        timestamp: '10:00:00',
+        topic: 'v1/devices/me/attributes',
+        data: { Arm: '"160"' }
+      });
+
+      // Packet must be ignored / discarded
+      assert.equal(res, null, `Floaino packet must return null (dropped) when ${poseKey} is active`);
+      assert.equal(app.getState().isHolding, false, `Hold timer must not start for non-up pose ${poseKey}`);
+      assert.equal(env.getElement('advice').textContent, adviceBefore, `Advice must not be altered by Floaino for ${poseKey}`);
+    }
+
+    // Also verify when no pose is selected (null)
+    app.setState({ selectedPoseKey: null });
+    const resNoPose = app.handleFloainoPacket({ data: { Arm: '"160"' } });
+    assert.equal(resNoPose, null, 'Floaino packet must be dropped when no pose is selected');
   });
 
-  await t.test('5. Floaino Packet Handling for Single Target Pose (kae_kiat_forward)', () => {
-    app.setEngine('floaino');
-    app.selectPose('kae_kiat_forward');
+  await t.test('5. Up Pose Activation: kae_kiat_upward and arms_up process Floaino packets', () => {
+    const upPoses = ['kae_kiat_upward', 'arms_up'];
 
-    // Test Boolean "true" packet
-    const resTrue = app.handleFloainoPacket({
-      timestamp: '10:00:00',
-      topic: 'v1/devices/me/attributes',
-      data: { IOT_GATEWAY: '"true"' }
-    });
-    assert.equal(resTrue.allCorrect, true);
-    assert.equal(resTrue.key, 'IOT_GATEWAY');
+    for (const upPoseKey of upPoses) {
+      assert.ok(app.FLOAINO_UP_POSES.includes(upPoseKey), `${upPoseKey} must be in FLOAINO_UP_POSES`);
+      assert.equal(app.isFloainoPose(upPoseKey), true, `isFloainoPose must return true for ${upPoseKey}`);
 
-    // Test Boolean "false" packet
-    const resFalse = app.handleFloainoPacket({
-      timestamp: '10:00:01',
-      topic: 'v1/devices/me/attributes',
-      data: { IOT_GATEWAY: '"false"' }
-    });
-    assert.equal(resFalse.allCorrect, false);
+      app.selectPose(upPoseKey);
+      assert.equal(app.getEngine(), 'floaino', `getEngine must return floaino for ${upPoseKey}`);
 
-    // Test Numeric angle in target range (125°–180° for kae_kiat_forward arm)
-    const resArmOk = app.handleFloainoPacket({
+      // Initial state: Waiting for Floaino signal
+      const adviceEl = env.getElement('advice');
+      assert.ok(
+        adviceEl.textContent.includes('รอรับสัญญาณมุมแขนจาก Floaino AI...'),
+        `Initial advice for ${upPoseKey} must prompt for Floaino signal`
+      );
+
+      // Status card / pose label must display subtle Floaino badge
+      const poseLabel = env.getElement('pose-label');
+      assert.ok(
+        poseLabel.innerHTML.includes('badge-floaino') || poseLabel.textContent.includes('Floaino AI'),
+        `Pose label must display Floaino AI badge for ${upPoseKey}`
+      );
+
+      // Send valid Up pose packet (160° within 150°–180° range)
+      const res = app.handleFloainoPacket({
+        timestamp: '10:00:00',
+        topic: 'v1/devices/me/attributes',
+        data: { Arm: '"160"' }
+      });
+
+      assert.ok(res !== null, `Packet must be processed for ${upPoseKey}`);
+      assert.equal(res.allCorrect, true, `160° must evaluate to allCorrect: true for ${upPoseKey}`);
+      assert.equal(app.getState().isHolding, true, `Hold timer must start for ${upPoseKey}`);
+
+      // Angle readings list must contain Floaino badge
+      const angleReadings = env.getElement('angle-readings');
+      assert.ok(
+        angleReadings.innerHTML.includes('badge-floaino') || angleReadings.textContent.includes('Floaino AI'),
+        `Angle readings list must show Floaino AI badge for ${upPoseKey}`
+      );
+    }
+  });
+
+  await t.test('6. Arm Angle Threshold Logic (150°–180° pass, <150° advice to raise arms)', () => {
+    app.selectPose('kae_kiat_upward');
+
+    // Passing threshold boundaries: 150°, 165°, 180°
+    const passAngles = ['150', '165', '180'];
+    for (const angleStr of passAngles) {
+      const res = app.handleFloainoPacket({
+        timestamp: '10:00:00',
+        data: { Arm: `"${angleStr}"` }
+      });
+      assert.equal(res.allCorrect, true, `Angle ${angleStr}° must pass (150°–180°)`);
+      assert.ok(res.feedback.includes('ถูกต้องตามเกณฑ์'), 'Passing feedback must confirm compliance');
+      assert.equal(app.getState().isHolding, true);
+    }
+
+    // Failing low angles (< 150°): 85°, 140°
+    const lowAngles = ['85', '140'];
+    for (const angleStr of lowAngles) {
+      const res = app.handleFloainoPacket({
+        timestamp: '10:00:01',
+        data: { Arm: `"${angleStr}"` }
+      });
+      assert.equal(res.allCorrect, false, `Angle ${angleStr}° must fail (< 150°)`);
+      assert.ok(
+        res.feedback.includes('ชูแขน') || res.feedback.includes('แนบใบหู'),
+        `Feedback for ${angleStr}° must advise raising arms higher`
+      );
+      assert.equal(app.getState().isHolding, false, 'Hold timer must reset on incorrect angle');
+      assert.equal(env.getElement('timer-count').textContent, '0');
+    }
+
+    // Failing high angle (> 180°): 195°
+    const resHigh = app.handleFloainoPacket({
       timestamp: '10:00:02',
-      topic: 'v1/devices/me/attributes',
-      data: { Arm: '"154"' }
+      data: { Arm: '"195"' }
     });
-    assert.equal(resArmOk.allCorrect, true);
-    assert.ok(resArmOk.feedback.includes('ถูกต้องตามเกณฑ์'));
+    assert.equal(resHigh.allCorrect, false);
+    assert.ok(resHigh.feedback.includes('ลดแขน') || resHigh.feedback.includes('แนวตรง'));
 
-    // Test Numeric angle out of range (85° < 125°)
-    const resArmBad = app.handleFloainoPacket({
-      timestamp: '10:00:03',
-      topic: 'v1/devices/me/attributes',
-      data: { Arm: '"85"' }
-    });
-    assert.equal(resArmBad.allCorrect, false);
-    assert.ok(resArmBad.feedback.includes('ต่ำกว่าเกณฑ์') || resArmBad.feedback.includes('เหยียดแขน'));
+    // Boolean true / false packets
+    const resTrue = app.handleFloainoPacket({ data: { IOT_GATEWAY: '"true"' } });
+    assert.equal(resTrue.allCorrect, true);
+
+    const resFalse = app.handleFloainoPacket({ data: { IOT_GATEWAY: '"false"' } });
+    assert.equal(resFalse.allCorrect, false);
   });
 
-  await t.test('6. Simulation Helper (simulateFloaino)', () => {
-    // Switch to mediapipe first
-    app.setEngine('mediapipe');
-    assert.equal(app.getEngine(), 'mediapipe');
+  await t.test('7. Simulation Helper (simulateFloaino)', () => {
+    // Start on a non-up pose
+    app.selectPose('t_pose');
+    assert.equal(app.getState().selectedPoseKey, 't_pose');
 
-    // Calling simulateFloaino automatically activates floaino engine
+    // Calling simulateFloaino('160') automatically switches to an Up pose (kae_kiat_upward)
+    app.simulateFloaino('160');
+    assert.equal(app.isFloainoPose(app.getState().selectedPoseKey), true);
+    assert.equal(app.getState().isHolding, true);
+
+    // Simulating incorrect posture breaks hold
+    app.simulateFloaino('85');
+    assert.equal(app.getState().isHolding, false);
+    assert.equal(env.getElement('status-card').className, 'status-card incorrect');
+
+    // Simulating true resumes hold
     app.simulateFloaino('true');
-    assert.equal(app.getEngine(), 'floaino');
-
-    const state = app.getState();
-    assert.equal(state.currentEngine, 'floaino');
-    assert.equal(state.isHolding, true);
-
-    // Calling simulateFloaino('false') resets hold
-    app.simulateFloaino('false');
-    const badState = app.getState();
-    assert.equal(badState.isHolding, false);
+    assert.equal(app.getState().isHolding, true);
   });
 
-  await t.test('7. Floaino Hold Timer Completion Progression', () => {
-    app.setEngine('floaino');
-    app.selectPose('kae_kiat_forward');
+  await t.test('8. Floaino Hold Timer Completion Progression on Up Pose', () => {
+    app.selectPose('kae_kiat_upward');
     app.setState({ targetHoldDuration: 2 });
 
     // Initial correct packet
     app.handleFloainoPacket({
       timestamp: '10:00:00',
-      data: { IOT_GATEWAY: '"true"' }
+      data: { Arm: '"165"' }
     });
 
     const midState = app.getState();
     assert.equal(midState.isHolding, true);
     assert.equal(midState.isCompleted, false);
 
-    // Artificially advance holdStartTime backwards by 2.5s to simulate holding
+    // Advance holdStartTime backwards by 2.5s (exceeding 2s target)
     app.setState({ holdStartTime: Date.now() - 2500 });
 
     // Next correct packet arrives
     app.handleFloainoPacket({
       timestamp: '10:00:02',
-      data: { IOT_GATEWAY: '"true"' }
+      data: { Arm: '"165"' }
     });
 
     const finalState = app.getState();
     assert.equal(finalState.isCompleted, true);
-    assert.ok(finalState.completedPoses.has('kae_kiat_forward'));
+    assert.ok(finalState.completedPoses.has('kae_kiat_upward'));
+    assert.equal(env.getElement('status-card').className, 'status-card correct completed');
+  });
+
+  await t.test('9. MQTT Status UI Updates (updateMqttStatusUI)', () => {
+    app.updateMqttStatusUI({ connected: true });
+    const mqttEl = env.getElement('mqtt-status');
+    assert.ok(mqttEl.textContent.includes('เชื่อมต่อแล้ว'));
+    assert.equal(mqttEl.className, 'badge connected');
+
+    app.updateMqttStatusUI({ connected: false });
+    assert.ok(mqttEl.textContent.includes('รอเชื่อมต่อ'));
+    assert.equal(mqttEl.className, 'badge disconnected');
   });
 });

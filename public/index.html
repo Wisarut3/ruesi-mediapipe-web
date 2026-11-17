@@ -11,15 +11,9 @@
     <header>
       <div class="header-main">
         <h1>🧘‍♂️ ระบบวิเคราะห์ท่าทางฤๅษีดัดตน <span class="version-tag">AI Coach</span></h1>
-        <!-- AI Engine Switcher (MediaPipe vs Floaino) -->
-        <div class="engine-switch-group" role="radiogroup" aria-label="เลือกแหล่งข้อมูล AI">
-          <button type="button" id="engine-mediapipe-btn" class="engine-btn active" data-engine="mediapipe" title="ใช้กล้องเว็บแคมและการประมวลผล MediaPipe ในเบราว์เซอร์">📷 MediaPipe</button>
-          <button type="button" id="engine-floaino-btn" class="engine-btn" data-engine="floaino" title="เชื่อมต่อข้อมูล AI แบบ Real-time จาก Floaino MQTT Gateway">📡 Floaino AI</button>
-        </div>
       </div>
       <div class="header-badges">
         <div id="camera-status" class="badge">กำลังเริ่มกล้อง...</div>
-        <div id="mqtt-status" class="badge disconnected" style="display: none;">MQTT: รอเชื่อมต่อ...</div>
       </div>
     </header>
 
@@ -158,43 +152,19 @@
           </div>
         </div>
 
-        <!-- Floaino AI Monitor & Gateway Panel -->
-        <div id="floaino-card" class="floaino-card" style="display: none;">
-          <div class="floaino-header">
-            <div>
-              <h2 class="section-label">📡 Floaino AI Gateway</h2>
-              <p class="floaino-subtitle">ThingsBoard MQTT (Token: <code>SKDvIt6lta</code>)</p>
-            </div>
-            <span id="floaino-conn-badge" class="badge disconnected">กำลังเชื่อมต่อ...</span>
-          </div>
-
-          <div class="floaino-payload-box">
-            <div class="payload-header">
-              <span class="payload-title">ข้อมูลล่าสุดจาก Floaino (JSON Payload):</span>
-              <span id="floaino-timestamp" class="payload-time">-</span>
-            </div>
-            <pre id="floaino-raw-json">{ "status": "waiting_for_floaino_message" }</pre>
-          </div>
-
-          <div class="floaino-sim-box">
-            <div class="sim-label">จำลองสัญญาณทดสอบ (Simulation):</div>
-            <div class="sim-btn-row">
-              <button type="button" class="btn-sim success" onclick="simulateFloaino('true')">ท่าถูก (true)</button>
-              <button type="button" class="btn-sim danger" onclick="simulateFloaino('false')">ท่าผิด (false)</button>
-              <button type="button" class="btn-sim info" onclick="simulateFloaino('155')">แขน 155°</button>
-              <button type="button" class="btn-sim warning" onclick="simulateFloaino('85')">แขน 85°</button>
-            </div>
-          </div>
-
-          <div class="floaino-log-box">
-            <div class="log-title">ประวัติการรับข้อมูลสด (Live MQTT Stream):</div>
-            <ul id="floaino-log-list" class="floaino-log-list"></ul>
-          </div>
-        </div>
-
         <div class="debug-panel">
           <h2 class="section-label">ค่ามุมสด (Live Angles)</h2>
           <div id="angle-readings" class="angle-readings-list"></div>
+          <!-- Compact Floaino AI Simulation Controls -->
+          <div class="floaino-sim-box debug-sim-box">
+            <div class="sim-label">จำลองสัญญาณ Floaino AI (Simulation):</div>
+            <div class="sim-btn-row">
+              <button type="button" class="btn-sim success" onclick="simulateFloaino('true')">ชูแขนถูก (160°/true)</button>
+              <button type="button" class="btn-sim danger" onclick="simulateFloaino('false')">ชูแขนผิด (false)</button>
+              <button type="button" class="btn-sim info" onclick="simulateFloaino('160')">มุม 160°</button>
+              <button type="button" class="btn-sim warning" onclick="simulateFloaino('85')">มุม 85°</button>
+            </div>
+          </div>
         </div>
 
       </section>
