@@ -146,6 +146,29 @@ function createMockFloainoEnv() {
   getOrCreateElement('timer-target', 'span');
   getOrCreateElement('timer-progress-bar', 'div');
 
+  const webcam = getOrCreateElement('webcam', 'video');
+  webcam.videoWidth = 640;
+  webcam.videoHeight = 480;
+
+  const canvas = getOrCreateElement('output-canvas', 'canvas');
+  canvas.width = 640;
+  canvas.height = 480;
+  canvas.getContext = () => ({
+    canvas,
+    save: () => {},
+    restore: () => {},
+    clearRect: () => {},
+    beginPath: () => {},
+    moveTo: () => {},
+    lineTo: () => {},
+    stroke: () => {},
+    drawImage: () => {},
+    translate: () => {},
+    scale: () => {},
+    strokeStyle: '#000',
+    lineWidth: 1
+  });
+
   const mockDocument = {
     getElementById: (id) => getOrCreateElement(id),
     createElement: (tag) => new MockElement('', tag),
@@ -290,7 +313,7 @@ test('Floaino AI & MQTT Integration Suite', async (t) => {
       // Status card / pose label must display subtle Floaino badge
       const poseLabel = env.getElement('pose-label');
       assert.ok(
-        poseLabel.innerHTML.includes('badge-floaino') || poseLabel.textContent.includes('Floaino AI'),
+        poseLabel.innerHTML.includes('badge-floaino'),
         `Pose label must display Floaino AI badge for ${upPoseKey}`
       );
 
@@ -308,7 +331,7 @@ test('Floaino AI & MQTT Integration Suite', async (t) => {
       // Angle readings list must contain Floaino badge
       const angleReadings = env.getElement('angle-readings');
       assert.ok(
-        angleReadings.innerHTML.includes('badge-floaino') || angleReadings.textContent.includes('Floaino AI'),
+        angleReadings.innerHTML.includes('badge-floaino'),
         `Angle readings list must show Floaino AI badge for ${upPoseKey}`
       );
     }
@@ -419,5 +442,115 @@ test('Floaino AI & MQTT Integration Suite', async (t) => {
     app.updateMqttStatusUI({ connected: false });
     assert.ok(mqttEl.textContent.includes('รอเชื่อมต่อ'));
     assert.equal(mqttEl.className, 'badge disconnected');
+  });
+
+  await t.test('10. MediaPipe Landmark Evaluation (onPoseResults) Must Not Overwrite Floaino State During Up Pose', () => {
+    // Select Up pose and send correct Floaino packet
+    app.selectPose('kae_kiat_upward');
+    app.handleFloainoPacket({
+      timestamp: '10:00:00',
+      data: { Arm: '"165"' }
+    });
+
+    const stateBefore = app.getState();
+    assert.equal(stateBefore.isHolding, true, 'Floaino hold must be active');
+    const adviceBefore = env.getElement('advice').textContent;
+    const statusClassBefore = env.getElement('status-card').className;
+    assert.ok(statusClassBefore.includes('correct'));
+
+    // Create synthetic landmarks (e.g. failing or neutral)
+    const syntheticLandmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, z: 0, visibility: 0.99 }));
+
+    // Simulate 10 frames of MediaPipe onPoseResults
+    for (let frame = 0; frame < 10; frame++) {
+      app.onPoseResults({ poseLandmarks: syntheticLandmarks });
+    }
+
+    // Floaino hold state and advice must remain completely untouched
+    assert.equal(app.getState().isHolding, true, 'MediaPipe landmark evaluation must not reset Floaino hold');
+    assert.equal(env.getElement('advice').textContent, adviceBefore, 'Advice must not be overwritten by MediaPipe');
+    assert.equal(env.getElement('status-card').className, statusClassBefore, 'Status card class must not be changed by MediaPipe');
+
+    // Simulate camera lost / occluded frame (null landmarks) during Up pose
+    app.onPoseResults({ poseLandmarks: null });
+    assert.notEqual(env.getElement('advice').textContent, 'ไม่พบตัวบุคคล กรุณากลับมายืนในระยะกล้อง', 'MediaPipe must not show unmonitored advice during Floaino Up pose');
+    assert.equal(app.getState().isHolding, true, 'Null landmarks must not reset Floaino hold timer during Up pose');
+
+    // Conversely, on a non-up pose (e.g. t_pose), null landmarks DOES set unmonitored advice
+    app.selectPose('t_pose');
+    app.onPoseResults({ poseLandmarks: null });
+    assert.equal(env.getElement('advice').textContent, 'ไม่พบตัวบุคคล กรุณากลับมายืนในระยะกล้อง', 'MediaPipe must handle null landmarks on standard non-up poses');
+  });
+
+  await t.test('11. ThingsBoard Multi-format Telemetry Parsing & Metadata Immunity', () => {
+    app.selectPose('kae_kiat_upward');
+
+    // Telemetry payload with ThingsBoard timestamp key 'ts'
+    const resTs = app.handleFloainoPacket({
+      data: { ts: 1700000000000, Arm: '"165"' }
+    });
+    assert.ok(resTs !== null);
+    assert.equal(resTs.key, 'Arm');
+    assert.equal(resTs.parsed.value, 165);
+    assert.equal(resTs.allCorrect, true);
+
+    // ThingsBoard envelope with 'values' sub-object
+    const resValues = app.handleFloainoPacket({
+      data: { ts: 1700000000000, values: { Arm: '160' } }
+    });
+    assert.ok(resValues !== null);
+    assert.equal(resValues.key, 'Arm');
+    assert.equal(resValues.parsed.value, 160);
+    assert.equal(resValues.allCorrect, true);
+
+    // Telemetry with alternative angle key 'Angle'
+    const resAngle = app.handleFloainoPacket({
+      data: { ts: 1700000000000, Angle: '175' }
+    });
+    assert.ok(resAngle !== null);
+    assert.equal(resAngle.key, 'Angle');
+    assert.equal(resAngle.parsed.value, 175);
+    assert.equal(resAngle.allCorrect, true);
+
+    // Lowercase 'arm' with low angle
+    const resLow = app.handleFloainoPacket({
+      data: { ts: 1700000000000, arm: '85' }
+    });
+    assert.ok(resLow !== null);
+    assert.equal(resLow.allCorrect, false);
+    assert.ok(resLow.feedback.includes('ชูแขน'));
+
+    // Payload containing only timestamp without sensor telemetry
+    const resOnlyTs = app.handleFloainoPacket({
+      data: { ts: 1700000000000 }
+    });
+    assert.equal(resOnlyTs.parsed.type, 'unknown', 'Timestamp-only payload must not evaluate as numeric degree');
+  });
+
+  await t.test('12. Rapid Switching Stress Test between Up and Non-Up Poses with Live Packet Stream', () => {
+    const sequence = ['kae_kiat_upward', 't_pose', 'arms_up', 'kae_kiat_forward', 'kae_kiat_upward', 'arms_down'];
+
+    for (let i = 0; i < sequence.length; i++) {
+      const poseKey = sequence[i];
+      app.selectPose(poseKey);
+
+      const isUp = app.isFloainoPose(poseKey);
+      assert.equal(app.isFloainoPose(poseKey), isUp);
+
+      // Packet streams in while user switches
+      const res = app.handleFloainoPacket({
+        timestamp: '10:00:00',
+        data: { Arm: '"165"' }
+      });
+
+      if (isUp) {
+        assert.ok(res !== null, `Floaino packet must be processed for Up pose ${poseKey}`);
+        assert.equal(res.allCorrect, true);
+        assert.equal(app.getState().isHolding, true);
+      } else {
+        assert.equal(res, null, `Floaino packet must be dropped for non-up pose ${poseKey}`);
+        assert.equal(app.getState().isHolding, false);
+      }
+    }
   });
 });

@@ -248,7 +248,6 @@ function selectPose(key, btn) {
   if (poseLabelEl) {
     if (isFloainoPose(selectedPoseKey)) {
       poseLabelEl.innerHTML = `${escapeHtml(poseName)} <span class="badge-floaino">📡 ข้อมูลจาก Floaino AI</span>`;
-      poseLabelEl.textContent = `${poseName} 📡 ข้อมูลจาก Floaino AI`;
     } else {
       poseLabelEl.textContent = poseName;
     }
@@ -718,6 +717,63 @@ function evaluatePose(landmarks) {
 
 // ─── MediaPipe Pose Setup ─────────────────────────────────────────────────────
 let pose = null;
+
+function onPoseResults(results) {
+  if (!canvasEl || !videoEl) return;
+  // Sync canvas size to video
+  canvasEl.width  = videoEl.videoWidth  || 640;
+  canvasEl.height = videoEl.videoHeight || 480;
+
+  if (ctx) {
+    ctx.save();
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+
+    // Mirror the canvas so the user sees themselves naturally (like a mirror)
+    ctx.translate(canvasEl.width, 0);
+    ctx.scale(-1, 1);
+
+    // Draw camera frame if available
+    if (results && results.image) {
+      try {
+        ctx.drawImage(results.image, 0, 0, canvasEl.width, canvasEl.height);
+      } catch (e) {}
+    }
+  }
+
+  if (results && results.poseLandmarks) {
+    // Invert execution order: evaluate the pose before skeleton drawing
+    const activePose = selectedPoseKey ? posesData[selectedPoseKey] : null;
+    let evalResult = null;
+    // Only evaluate via MediaPipe landmarks when NOT an Up pose (Up poses evaluate via Floaino)
+    if (selectedPoseKey && !isFloainoPose(selectedPoseKey)) {
+      evalResult = evaluatePose(results.poseLandmarks);
+    }
+
+    // Draw skeleton connectors with dynamic error highlighting
+    if (ctx) {
+      renderSkeletonConnectors(ctx, results.poseLandmarks, evalResult, activePose);
+
+      if (typeof drawLandmarks !== 'undefined') {
+        drawLandmarks(ctx, results.poseLandmarks, {
+          color: '#f43f5e', lineWidth: 2, radius: 5
+        });
+      }
+
+      ctx.restore();
+    }
+  } else {
+    if (ctx) ctx.restore();
+    if (selectedPoseKey && !isFloainoPose(selectedPoseKey)) {
+      if (angleOverlayEl) angleOverlayEl.innerHTML = '<div class="chip low-vis">ไม่พบตัวบุคคล</div>';
+      resetHoldTimer();
+      isCompleted = false;
+      updateTimerUI(0);
+      if (statusCardEl) statusCardEl.className = 'status-card waiting';
+      if (adviceEl) adviceEl.textContent = 'ไม่พบตัวบุคคล กรุณากลับมายืนในระยะกล้อง';
+    }
+  }
+}
+
 if (typeof Pose !== 'undefined') {
   pose = new Pose({
     locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
@@ -731,53 +787,7 @@ if (typeof Pose !== 'undefined') {
     minTrackingConfidence: 0.5,
   });
 
-  pose.onResults(results => {
-    if (!canvasEl || !videoEl) return;
-    // Sync canvas size to video
-    canvasEl.width  = videoEl.videoWidth  || 640;
-    canvasEl.height = videoEl.videoHeight || 480;
-
-    ctx.save();
-    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-
-    // Mirror the canvas so the user sees themselves naturally (like a mirror)
-    ctx.translate(canvasEl.width, 0);
-    ctx.scale(-1, 1);
-
-    // Draw camera frame
-    ctx.drawImage(results.image, 0, 0, canvasEl.width, canvasEl.height);
-
-    if (results.poseLandmarks) {
-      // Invert execution order: evaluate the pose before skeleton drawing
-      const activePose = selectedPoseKey ? posesData[selectedPoseKey] : null;
-      let evalResult = null;
-      // Only evaluate via MediaPipe landmarks when NOT an Up pose (Up poses evaluate via Floaino)
-      if (selectedPoseKey && !isFloainoPose(selectedPoseKey)) {
-        evalResult = evaluatePose(results.poseLandmarks);
-      }
-
-      // Draw skeleton connectors with dynamic error highlighting
-      renderSkeletonConnectors(ctx, results.poseLandmarks, evalResult, activePose);
-
-      if (typeof drawLandmarks !== 'undefined') {
-        drawLandmarks(ctx, results.poseLandmarks, {
-          color: '#f43f5e', lineWidth: 2, radius: 5
-        });
-      }
-
-      ctx.restore();
-    } else {
-      ctx.restore();
-      if (selectedPoseKey && !isFloainoPose(selectedPoseKey)) {
-        if (angleOverlayEl) angleOverlayEl.innerHTML = '<div class="chip low-vis">ไม่พบตัวบุคคล</div>';
-        resetHoldTimer();
-        isCompleted = false;
-        updateTimerUI(0);
-        if (statusCardEl) statusCardEl.className = 'status-card waiting';
-        if (adviceEl) adviceEl.textContent = 'ไม่พบตัวบุคคล กรุณากลับมายืนในระยะกล้อง';
-      }
-    }
-  });
+  pose.onResults(onPoseResults);
 }
 
 // ─── Skeleton Connector Rendering & Highlight Engine (R2) ─────────────────────
@@ -874,6 +884,7 @@ function renderSkeletonConnectors(ctx, landmarks, evalResult, pose) {
 if (typeof window !== 'undefined') {
   window.renderSkeletonConnectors = renderSkeletonConnectors;
   window.DEFAULT_POSE_CONNECTIONS = DEFAULT_POSE_CONNECTIONS;
+  window.onPoseResults = onPoseResults;
 }
 
 // ─── Camera ───────────────────────────────────────────────────────────────────
@@ -939,7 +950,7 @@ function stripQuotes(val) {
  * @returns {{ type: 'boolean'|'number'|'string'|'unknown', value: any, ok: boolean, text: string }}
  */
 function parseFloainoValue(rawVal) {
-  if (rawVal === undefined || rawVal === null) {
+  if (rawVal === undefined || rawVal === null || typeof rawVal === 'object') {
     return { type: 'unknown', value: null, ok: false, text: '' };
   }
   const clean = stripQuotes(rawVal);
@@ -985,10 +996,33 @@ function handleFloainoPacket(packet) {
   let rawVal = data;
 
   if (typeof data === 'object' && data !== null) {
-    const keys = Object.keys(data).filter(k => k !== 'timestamp' && k !== 'topic');
-    if (keys.length > 0) {
-      key = keys[0];
-      rawVal = data[key];
+    // If nested under 'values', unwrap
+    const target = (data.values && typeof data.values === 'object' && data.values !== null) ? data.values : data;
+
+    // Priority keys for Floaino posture telemetry
+    const priorityKeys = [
+      'Arm', 'arm', 'ARM',
+      'Angle', 'angle', 'ANGLE',
+      'Arm_Angle', 'arm_angle', 'ArmAngle', 'armAngle',
+      'IOT_GATEWAY', 'iot_gateway', 'gateway', 'Gateway',
+      'posture', 'Posture', 'status', 'Status',
+      'value', 'val'
+    ];
+
+    const metadataKeys = new Set(['ts', 'timestamp', 'topic', 'device', 'deviceId', 'client', 'shared']);
+
+    const matchedKey = priorityKeys.find(k => k in target);
+    if (matchedKey) {
+      key = matchedKey;
+      rawVal = target[matchedKey];
+    } else {
+      const candidates = Object.keys(target).filter(k => !metadataKeys.has(k));
+      if (candidates.length > 0) {
+        key = candidates[0];
+        rawVal = target[key];
+      } else {
+        rawVal = null;
+      }
     }
   }
 
@@ -1044,7 +1078,6 @@ function handleFloainoPacket(packet) {
   const poseName = activePose ? activePose.name : selectedPoseKey;
   if (poseLabelEl) {
     poseLabelEl.innerHTML = `${escapeHtml(poseName)} <span class="badge-floaino">📡 ข้อมูลจาก Floaino AI</span>`;
-    poseLabelEl.textContent = `${poseName} 📡 ข้อมูลจาก Floaino AI`;
   }
 
   // Drive Hold Timer and Audio Coaching
@@ -1155,6 +1188,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     calcAngle,
     evaluatePose,
+    onPoseResults,
     renderSkeletonConnectors,
     DEFAULT_POSE_CONNECTIONS,
     speak,
