@@ -31,9 +31,9 @@ mqttClient.on('connect', () => {
   console.log('✅ Connected to Floaino MQTT Broker:', MQTT_BROKER);
   io.emit('mqtt_status', { connected: true, token: FLOAINO_TOKEN });
 
-  mqttClient.subscribe([MQTT_TOPIC, 'v1/devices/me/telemetry'], (err) => {
+  mqttClient.subscribe(MQTT_TOPIC, (err) => {
     if (!err) {
-      console.log('📡 Subscribed to topics:', MQTT_TOPIC, 'and v1/devices/me/telemetry');
+      console.log('📡 Subscribed to topic:', MQTT_TOPIC);
     } else {
       console.error('❌ Subscription error:', err);
     }
