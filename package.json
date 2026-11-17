@@ -5,10 +5,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/verify_poses.test.js && node test/timer_verification.js && node --test test/e2e_requirements.test.js && node --test test/m1_visual_reference.test.js"
+    "test": "node --test test/verify_poses.test.js && node test/timer_verification.js && node --test test/e2e_requirements.test.js && node --test test/m1_visual_reference.test.js && node --test test/floaino_integration.test.js"
   },
   "type": "commonjs",
   "dependencies": {
-    "express": "^5.3.0"
+    "express": "^5.3.0",
+    "mqtt": "^5.16.1",
+    "socket.io": "^4.8.4"
   }
 }
