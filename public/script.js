@@ -554,10 +554,38 @@ if (typeof document !== 'undefined') {
 }
 
 // ─── TTS ──────────────────────────────────────────────────────────────────────
+let cachedThaiVoice = null;
+
+function getThaiVoice() {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
+  if (cachedThaiVoice) return cachedThaiVoice;
+  if (typeof window.speechSynthesis.getVoices !== 'function') return null;
+  const voices = window.speechSynthesis.getVoices() || [];
+  cachedThaiVoice = voices.find(v => {
+    const l = (v.lang || '').toLowerCase();
+    const n = (v.name || '').toLowerCase();
+    return l === 'th-th' || l === 'th_th' || l.startsWith('th') || n.includes('thai') || n.includes('kanya') || n.includes('narisa');
+  }) || null;
+  return cachedThaiVoice;
+}
+
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  if (typeof window.speechSynthesis.onvoiceschanged !== 'undefined') {
+    window.speechSynthesis.onvoiceschanged = () => {
+      cachedThaiVoice = null;
+      getThaiVoice();
+    };
+  }
+}
+
 if (ttsBtn) {
   ttsBtn.addEventListener('click', () => {
     ttsEnabled = !ttsEnabled;
     ttsBtn.textContent = ttsEnabled ? '🔊 เสียงแนะนำ: เปิด' : '🔊 เสียงแนะนำ: ปิด';
+    if (ttsEnabled) {
+      cachedThaiVoice = null;
+      getThaiVoice();
+    }
   });
 }
 
@@ -572,6 +600,12 @@ function speak(text, bypassDebounce = false, force = false) {
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'th-TH';
+    const thaiVoice = getThaiVoice();
+    if (thaiVoice) {
+      u.voice = thaiVoice;
+    }
+    u.rate = 1.0;
+    u.pitch = 1.0;
     window.speechSynthesis.speak(u);
   } catch (err) {
     console.warn('Speech synthesis error:', err);
