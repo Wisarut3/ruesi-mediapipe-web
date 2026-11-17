@@ -850,6 +850,23 @@ function onPoseResults(results) {
     // Direction B: For Up poses, calculate arm angles and publish to ThingsBoard MQTT (throttled)
     if (selectedPoseKey && isFloainoPose(selectedPoseKey)) {
       publishAnglesThrottled(results.poseLandmarks);
+
+      // Continuous smooth timer countdown driven by the website while Floaino approves the pose
+      if (isHolding && !isCompleted && holdStartTime !== null) {
+        const now = Date.now();
+        const elapsed = (now - holdStartTime) / 1000;
+        updateTimerUI(elapsed);
+        const effectiveDuration = Math.max(1, targetHoldDuration || 10);
+        if (elapsed >= effectiveDuration) {
+          isCompleted = true;
+          isHolding = false;
+          floainoAudioState = 'completed';
+          onPoseComplete('สำเร็จแล้วครับ');
+        } else {
+          const remaining = Math.max(0, Math.ceil(effectiveDuration - elapsed));
+          if (adviceEl) adviceEl.textContent = `ท่าถูกต้อง ค้างไว้ ${remaining} วินาที`;
+        }
+      }
     } else if (selectedPoseKey) {
       evalResult = evaluatePose(results.poseLandmarks);
     }
