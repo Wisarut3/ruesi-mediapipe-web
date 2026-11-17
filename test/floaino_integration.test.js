@@ -553,4 +553,411 @@ test('Floaino AI & MQTT Integration Suite', async (t) => {
       }
     }
   });
+
+  await t.test('13. Direction B: Throttled MQTT Publishing of L.Arm and R.Arm on Up Pose', () => {
+    app.selectPose('kae_kiat_upward');
+
+    const emitted = [];
+    const mockSocket = {
+      connected: true,
+      emit: (event, payload) => {
+        emitted.push({ event, payload });
+      }
+    };
+
+    app.setState({ socket: mockSocket, lastAnglesPublishTime: 0 });
+
+    // Helper: generate synthetic landmarks for Up Pose
+    // Hip (23, 24) -> Shoulder (11, 12) -> Elbow (13, 14) -> Wrist (15, 16)
+    // Left: (0.4, 0.8) -> (0.4, 0.4) -> (0.4, 0.1) -> 180 deg
+    // Right: (0.6, 0.8) -> (0.6, 0.4) -> (0.6, 0.1) -> 180 deg
+    const syntheticUpLandmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.99 }));
+    syntheticUpLandmarks[23] = { x: 0.4, y: 0.8, visibility: 0.99 };
+    syntheticUpLandmarks[11] = { x: 0.4, y: 0.4, visibility: 0.99 };
+    syntheticUpLandmarks[13] = { x: 0.4, y: 0.1, visibility: 0.99 };
+    syntheticUpLandmarks[15] = { x: 0.4, y: 0.05, visibility: 0.99 };
+
+    syntheticUpLandmarks[24] = { x: 0.6, y: 0.8, visibility: 0.99 };
+    syntheticUpLandmarks[12] = { x: 0.6, y: 0.4, visibility: 0.99 };
+    syntheticUpLandmarks[14] = { x: 0.6, y: 0.1, visibility: 0.99 };
+    syntheticUpLandmarks[16] = { x: 0.6, y: 0.05, visibility: 0.99 };
+
+    // Test extractArmAngles directly
+    const extracted = app.extractArmAngles(syntheticUpLandmarks);
+    assert.ok(extracted !== null);
+    assert.equal(extracted.leftAngle, 180);
+    assert.equal(extracted.rightAngle, 180);
+    assert.equal(extracted.avgAngle, 180);
+
+    // Initial frame at t = 1000ms: must publish
+    const res1 = app.publishAnglesThrottled(syntheticUpLandmarks, 1000);
+    assert.ok(res1 !== null);
+    assert.equal(res1['L.Arm'], '180');
+    assert.equal(res1['R.Arm'], '180');
+    assert.equal(res1['Arm'], '180');
+    assert.equal(emitted.length, 1);
+    assert.equal(emitted[0].event, 'publish_angles');
+    assert.deepEqual(emitted[0].payload, { "L.Arm": "180", "R.Arm": "180", "Arm": "180" });
+
+    // Rapid successive frames within 500ms (t = 1100, 1200, 1350, 1499): all must be throttled
+    const throttledTimes = [1100, 1200, 1350, 1499];
+    for (const tVal of throttledTimes) {
+      const throttledRes = app.publishAnglesThrottled(syntheticUpLandmarks, tVal);
+      assert.equal(throttledRes, null, `Frame at t=${tVal}ms must be throttled`);
+      assert.equal(emitted.length, 1, 'No additional socket emit while throttled');
+    }
+
+    // Frame at t = 1500ms (>= 500ms elapsed): must publish
+    const res2 = app.publishAnglesThrottled(syntheticUpLandmarks, 1500);
+    assert.ok(res2 !== null, 'Frame at t=1500ms must publish');
+    assert.equal(emitted.length, 2);
+
+    // Also verify live onPoseResults integrates publishAnglesThrottled
+    app.setState({ lastAnglesPublishTime: 0 });
+    emitted.length = 0;
+    app.onPoseResults({ poseLandmarks: syntheticUpLandmarks });
+    assert.equal(emitted.length, 1, 'onPoseResults on Up pose must trigger publish_angles');
+  });
+
+  await t.test('14. Direction B: Suppression of Publishing During Non-Up Poses', () => {
+    const nonUpPoses = ['t_pose', 'kae_kiat_forward', 'arms_down', 'kae_kiat_prep', 'kae_kiat_left', 'kae_kiat_right'];
+
+    const emitted = [];
+    const mockSocket = {
+      connected: true,
+      emit: (event, payload) => {
+        emitted.push({ event, payload });
+      }
+    };
+    app.setState({ socket: mockSocket, lastAnglesPublishTime: 0 });
+
+    const syntheticLandmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.99 }));
+
+    for (const poseKey of nonUpPoses) {
+      app.selectPose(poseKey);
+      emitted.length = 0;
+
+      // Both publishAnglesThrottled and onPoseResults must suppress MQTT publishing
+      const pubRes = app.publishAnglesThrottled(syntheticLandmarks, 2000);
+      assert.equal(pubRes, null, `publishAnglesThrottled must return null for non-up pose ${poseKey}`);
+
+      app.onPoseResults({ poseLandmarks: syntheticLandmarks });
+      assert.equal(emitted.length, 0, `No socket emit must occur for non-up pose ${poseKey}`);
+    }
+  });
+
+  await t.test('15. Audio State-Transition Gating and Concise Coaching Phrases', () => {
+    app.selectPose('kae_kiat_upward');
+    app.setState({ ttsEnabled: true, lastSpokenAt: 0, targetHoldDuration: 10 });
+
+    const spokenUtterances = [];
+    global.window.speechSynthesis = {
+      speaking: false,
+      cancel: () => {},
+      speak: (u) => { spokenUtterances.push(u); }
+    };
+    global.SpeechSynthesisUtterance = function(text) { this.text = text; };
+
+    // Step 1: User transitions from idle -> correct hold
+    app.handleFloainoPacket({ data: { IOT_GATEWAY: '"true"' } });
+    assert.equal(app.getState().isHolding, true);
+    assert.equal(spokenUtterances.length, 1, 'Entering correct hold must trigger speech exactly once');
+    assert.equal(spokenUtterances[0].text, 'ท่าถูกต้อง ค้างไว้ครับ', 'Must speak concise hold entrance phrase');
+
+    // Step 2: User maintains hold for 9 seconds (packets arrive every 500ms)
+    // Audio State-Transition Gating: DO NOT speak on every packet! Keep silent so user can focus
+    for (let frame = 1; frame <= 18; frame++) {
+      app.handleFloainoPacket({ data: { IOT_GATEWAY: '"true"' } });
+    }
+    assert.equal(spokenUtterances.length, 1, 'While holding (seconds 1 to 9), zero additional speech triggers must occur');
+
+    // Step 3: Hold completion reached (10 seconds)
+    app.setState({ holdStartTime: Date.now() - 10500 });
+    app.handleFloainoPacket({ data: { IOT_GATEWAY: '"true"' } });
+    assert.equal(app.getState().isCompleted, true);
+    assert.equal(spokenUtterances.length, 2, 'Completion must trigger speech announcement');
+    assert.equal(spokenUtterances[1].text, 'สำเร็จแล้วครับ', 'Must speak concise completion phrase');
+
+    // Step 4: Posture breaks / form incorrect
+    app.handleFloainoPacket({ data: { IOT_GATEWAY: '"false"' } });
+    assert.equal(app.getState().isHolding, false);
+    assert.equal(spokenUtterances.length, 3, 'Form break must trigger correction speech');
+    assert.equal(spokenUtterances[2].text, 'ชูแขนขึ้นอีกครับ', 'Must speak concise correction phrase');
+
+    // Step 5: Consecutive incorrect packets arrive: must NOT spam audio
+    for (let frame = 1; frame <= 10; frame++) {
+      app.handleFloainoPacket({ data: { IOT_GATEWAY: '"false"' } });
+    }
+    assert.equal(spokenUtterances.length, 3, 'Consecutive incorrect packets must not spam audio');
+
+    // Step 6: User corrects posture again
+    app.handleFloainoPacket({ data: { IOT_GATEWAY: '"true"' } });
+    assert.equal(app.getState().isHolding, true);
+    assert.equal(spokenUtterances.length, 4, 'Re-entering correct hold must speak again');
+    assert.equal(spokenUtterances[3].text, 'ท่าถูกต้อง ค้างไว้ครับ');
+  });
+
+  await t.test('16. Non-Overlapping Audio Protection (speechSynthesis.speaking)', () => {
+    app.setState({ ttsEnabled: true, lastSpokenAt: 0 });
+
+    const spoken = [];
+    global.window.speechSynthesis = {
+      speaking: true, // Currently speaking an utterance
+      cancel: () => {},
+      speak: (u) => { spoken.push(u); }
+    };
+    global.SpeechSynthesisUtterance = function(text) { this.text = text; };
+
+    // With speaking: true, non-forced speech must be suppressed to prevent cutoffs
+    app.speak('คำแนะนำไม่ด่วน', false);
+    assert.equal(spoken.length, 0, 'Speech must be suppressed when window.speechSynthesis.speaking is true');
+
+    // When speaking becomes false, speech is allowed
+    global.window.speechSynthesis.speaking = false;
+    app.setState({ lastSpokenAt: 0 });
+    app.speak('คำแนะนำปกติ', false);
+    assert.equal(spoken.length, 1, 'Speech allowed when window.speechSynthesis.speaking is false');
+
+    // Forced announcement (e.g. completion) cuts through
+    global.window.speechSynthesis.speaking = true;
+    app.speak('สำเร็จแล้วครับ', true, true);
+    assert.equal(spoken.length, 2, 'Forced completion announcement cuts through');
+  });
+
+  await t.test('17. Floaino Receiving IOT_GATEWAY: "true" and "false" (Hold progression & reset)', () => {
+    app.selectPose('kae_kiat_upward');
+    app.setState({ targetHoldDuration: 5 });
+
+    // Floaino sends IOT_GATEWAY: "true"
+    const resTrue = app.handleFloainoPacket({
+      timestamp: '11:00:00',
+      data: { IOT_GATEWAY: '"true"' }
+    });
+    assert.equal(resTrue.allCorrect, true);
+    assert.equal(app.getState().isHolding, true);
+    assert.equal(env.getElement('status-card').className, 'status-card correct');
+
+    // Simulate hold completion
+    app.setState({ holdStartTime: Date.now() - 5500 });
+    const resComplete = app.handleFloainoPacket({
+      timestamp: '11:00:05',
+      data: { IOT_GATEWAY: '"true"' }
+    });
+    assert.equal(app.getState().isCompleted, true);
+    assert.ok(app.getState().completedPoses.has('kae_kiat_upward'));
+    assert.equal(env.getElement('status-card').className, 'status-card correct completed');
+
+    // Floaino sends IOT_GATEWAY: "false" (breaks posture)
+    const resFalse = app.handleFloainoPacket({
+      timestamp: '11:00:06',
+      data: { IOT_GATEWAY: '"false"' }
+    });
+    assert.equal(resFalse.allCorrect, false);
+    assert.equal(app.getState().isHolding, false);
+    assert.equal(env.getElement('timer-count').textContent, '0');
+    assert.equal(env.getElement('status-card').className, 'status-card incorrect');
+  });
+
+  await t.test('18. Backend MQTT Publish Bridge in server.js', () => {
+    delete require.cache[require.resolve('../server.js')];
+    const serverModule = require('../server.js');
+
+    assert.ok(serverModule.app, 'server.js must export app');
+    assert.ok(serverModule.server, 'server.js must export server');
+    assert.ok(serverModule.io, 'server.js must export io');
+    assert.ok(serverModule.mqttClient, 'server.js must export mqttClient');
+
+    // Simulate MQTT connected state
+    serverModule.setIsMqttConnected(true);
+
+    const published = [];
+    const origPublish = serverModule.mqttClient.publish;
+    serverModule.mqttClient.publish = (topic, payload) => {
+      published.push({ topic, payload });
+    };
+
+    try {
+      // Find publish_angles listener in socket.io connection event
+      const socketListeners = serverModule.io.listeners('connection');
+      assert.ok(socketListeners.length > 0, 'Socket connection listener must exist');
+
+      const mockSocket = {
+        emit: () => {},
+        on: (event, handler) => {
+          if (event === 'publish_angles') {
+            mockSocket._publishAnglesHandler = handler;
+          }
+        }
+      };
+
+      // Invoke socket connection handler to attach listeners
+      socketListeners[socketListeners.length - 1](mockSocket);
+      assert.ok(typeof mockSocket._publishAnglesHandler === 'function', 'publish_angles handler must be registered');
+
+      // Trigger publish_angles with payload
+      const testPayload = { "L.Arm": "165", "R.Arm": "160", "Arm": "163" };
+      mockSocket._publishAnglesHandler(testPayload);
+
+      // Verify publishing to both attributes and telemetry
+      assert.equal(published.length, 2);
+      assert.equal(published[0].topic, 'v1/devices/me/attributes');
+      assert.equal(published[0].payload, JSON.stringify(testPayload));
+      assert.equal(published[1].topic, 'v1/devices/me/telemetry');
+      assert.equal(published[1].payload, JSON.stringify(testPayload));
+    } finally {
+      // Restore publish and cleanly disconnect mqttClient
+      serverModule.mqttClient.publish = origPublish;
+      if (typeof serverModule.mqttClient.end === 'function') {
+        serverModule.mqttClient.end(true);
+      }
+    }
+  });
+
+  await t.test('19. Direction B: extractArmAngles Low Visibility & NaN Landmark Immunity', () => {
+    app.selectPose('kae_kiat_upward');
+
+    // Case A: Null or empty landmarks
+    assert.equal(app.extractArmAngles(null), null);
+    assert.equal(app.extractArmAngles([]), null);
+    assert.equal(app.extractArmAngles(Array(10)), null);
+
+    // Case B: Landmarks with NaN / infinite coordinates
+    const nanLandmarks = Array.from({ length: 33 }, () => ({ x: NaN, y: 0.5, visibility: 0.99 }));
+    assert.equal(app.extractArmAngles(nanLandmarks), null);
+
+    // Case C: Low visibility (< 0.5) landmarks must return null
+    const lowVisLandmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.2 }));
+    assert.equal(app.extractArmAngles(lowVisLandmarks), null);
+
+    // Case D: Occluded hips (seated user) safely falls back to elbow angles when elbows are visible
+    const seatedLandmarks = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.99 }));
+    seatedLandmarks[23] = { x: 0.5, y: 0.9, visibility: 0.1 }; // Hip occluded
+    seatedLandmarks[24] = { x: 0.5, y: 0.9, visibility: 0.1 }; // Hip occluded
+    // Elbows straight (180 deg)
+    seatedLandmarks[11] = { x: 0.4, y: 0.5, visibility: 0.99 };
+    seatedLandmarks[13] = { x: 0.4, y: 0.3, visibility: 0.99 };
+    seatedLandmarks[15] = { x: 0.4, y: 0.1, visibility: 0.99 };
+    seatedLandmarks[12] = { x: 0.6, y: 0.5, visibility: 0.99 };
+    seatedLandmarks[14] = { x: 0.6, y: 0.3, visibility: 0.99 };
+    seatedLandmarks[16] = { x: 0.6, y: 0.1, visibility: 0.99 };
+
+    const seatedAngles = app.extractArmAngles(seatedLandmarks);
+    assert.ok(seatedAngles !== null, 'Seated user with occluded hips must fall back to elbow angles');
+    assert.equal(seatedAngles.leftAngle, 180);
+    assert.equal(seatedAngles.rightAngle, 180);
+
+    // Case E: publishAnglesThrottled must not emit when landmarks return null
+    const emitted = [];
+    app.setState({
+      socket: { emit: (ev, p) => emitted.push({ ev, p }) },
+      lastAnglesPublishTime: 0
+    });
+    const pubRes = app.publishAnglesThrottled(lowVisLandmarks, 10000);
+    assert.equal(pubRes, null);
+    assert.equal(emitted.length, 0, 'No MQTT publish must occur for low visibility / unconfident landmarks');
+  });
+
+  await t.test('20. Audio State Transitions Cut Through Active Speech (No Silent Audio Drops)', () => {
+    app.selectPose('kae_kiat_upward');
+    app.setState({ ttsEnabled: true, lastSpokenAt: 0, targetHoldDuration: 10 });
+
+    const spoken = [];
+    let isSpeaking = false;
+    global.window.speechSynthesis = {
+      get speaking() { return isSpeaking; },
+      cancel: () => { isSpeaking = false; },
+      speak: (u) => {
+        isSpeaking = true;
+        spoken.push(u.text);
+      }
+    };
+    global.SpeechSynthesisUtterance = function(text) { this.text = text; };
+
+    // 1. User enters correct posture -> speaks "ท่าถูกต้อง ค้างไว้ครับ"
+    app.handleFloainoPacket({ data: { IOT_GATEWAY: '"true"' } });
+    assert.equal(spoken.length, 1);
+    assert.equal(spoken[0], 'ท่าถูกต้อง ค้างไว้ครับ');
+    assert.equal(isSpeaking, true, 'SpeechSynthesis should be active');
+
+    // 2. While speech is still active (speaking: true), user breaks posture
+    // Must NOT drop speech silently! State transition must force through and cancel stale speech
+    app.handleFloainoPacket({ data: { IOT_GATEWAY: '"false"' } });
+    assert.equal(spoken.length, 2, 'Form break must cut through active speech');
+    assert.equal(spoken[1], 'ชูแขนขึ้นอีกครับ');
+    assert.equal(app.getState().floainoAudioState, 'incorrect');
+
+    // 3. User corrects posture again while correction speech is active
+    app.handleFloainoPacket({ data: { IOT_GATEWAY: '"true"' } });
+    assert.equal(spoken.length, 3, 'Posture re-correction must cut through active speech');
+    assert.equal(spoken[2], 'ท่าถูกต้อง ค้างไว้ครับ');
+    assert.equal(app.getState().floainoAudioState, 'holding');
+  });
+
+  await t.test('21. Self-Echo Suppression (MediaPipe Angle Stream Echoes Ignored)', () => {
+    app.selectPose('kae_kiat_upward');
+    app.setState({ isHolding: false, isCompleted: false });
+
+    // Packet that contains MediaPipe angle stream (L.Arm and R.Arm) without Floaino evaluation (IOT_GATEWAY)
+    const echoPacket = {
+      data: {
+        "L.Arm": "165",
+        "R.Arm": "160",
+        "Arm": "163"
+      }
+    };
+    const echoResult = app.handleFloainoPacket(echoPacket);
+    assert.equal(echoResult, null, 'Outgoing MediaPipe angle echo must be ignored by handleFloainoPacket');
+    assert.equal(app.getState().isHolding, false, 'Self-echo must not start hold timer');
+
+    // Valid Floaino packet with IOT_GATEWAY is processed
+    const validPacket = {
+      data: {
+        IOT_GATEWAY: '"true"',
+        "L.Arm": "165"
+      }
+    };
+    const validResult = app.handleFloainoPacket(validPacket);
+    assert.ok(validResult !== null, 'Packet with IOT_GATEWAY must be evaluated');
+    assert.equal(validResult.allCorrect, true);
+    assert.equal(app.getState().isHolding, true);
+  });
+
+  await t.test('22. Server Publish Bridge Defensive Handling of Null / Empty Payloads', () => {
+    delete require.cache[require.resolve('../server.js')];
+    const serverModule = require('../server.js');
+    serverModule.setIsMqttConnected(true);
+
+    const published = [];
+    const origPublish = serverModule.mqttClient.publish;
+    serverModule.mqttClient.publish = (topic, payload) => {
+      published.push({ topic, payload });
+    };
+
+    try {
+      const socketListeners = serverModule.io.listeners('connection');
+      const mockSocket = {
+        emit: () => {},
+        on: (event, handler) => {
+          if (event === 'publish_angles') {
+            mockSocket._publishAnglesHandler = handler;
+          }
+        }
+      };
+      socketListeners[socketListeners.length - 1](mockSocket);
+
+      // Publishing null or undefined payload must not throw or publish invalid content
+      mockSocket._publishAnglesHandler(null);
+      mockSocket._publishAnglesHandler(undefined);
+      assert.equal(published.length, 0, 'Null/undefined payloads must be ignored');
+
+      // Publishing valid payload
+      mockSocket._publishAnglesHandler({ "L.Arm": "170", "R.Arm": "170", "Arm": "170" });
+      assert.equal(published.length, 2, 'Valid payload must be published to both attributes and telemetry');
+    } finally {
+      serverModule.mqttClient.publish = origPublish;
+      if (typeof serverModule.mqttClient.end === 'function') {
+        serverModule.mqttClient.end(true);
+      }
+    }
+  });
 });

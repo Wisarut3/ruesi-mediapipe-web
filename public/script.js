@@ -26,6 +26,9 @@ function isFloainoPose(poseKey) {
 }
 
 let socket = null;
+let lastAnglesPublishTime = 0;
+const ANGLES_PUBLISH_INTERVAL_MS = 500;
+let floainoAudioState = 'idle'; // 'idle' | 'holding' | 'completed' | 'incorrect'
 
 // Pose Hold Timer State (R1, R2, R3)
 const GRACE_PERIOD_MS = 450;
@@ -229,6 +232,11 @@ function selectPose(key, btn) {
   }
   resetHoldTimer();
   isCompleted = false;
+  floainoAudioState = 'idle';
+  lastAnglesPublishTime = 0;
+  if (typeof window !== 'undefined' && window.speechSynthesis) {
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+  }
   selectedPoseKey = (key && typeof key === 'object') ? (key.id || key.key || null) : key;
 
   if (typeof document !== 'undefined') {
@@ -297,7 +305,7 @@ function updateTimerUI(seconds) {
   }
 }
 
-function onPoseComplete() {
+function onPoseComplete(message = null) {
   if (statusCardEl) statusCardEl.className = 'status-card correct completed';
   if (adviceEl) adviceEl.textContent = '🎉 ท่าทางสำเร็จ! ยอดเยี่ยมมาก';
   updateTimerUI(targetHoldDuration);
@@ -311,8 +319,9 @@ function onPoseComplete() {
     }
   }
 
-  // Announce completion bypassing debounce (R2)
-  speak('ท่าทางสำเร็จ!', true);
+  // Announce completion bypassing debounce and non-overlapping block (R2 + Direction B)
+  const completionMsg = message || (isFloainoPose(selectedPoseKey) ? 'สำเร็จแล้วครับ' : 'ท่าทางสำเร็จ!');
+  speak(completionMsg, true, true);
 
   // Auto-advance to next pose if setting is enabled (R2)
   if (autoAdvanceEnabled) {
@@ -552,8 +561,10 @@ if (ttsBtn) {
   });
 }
 
-function speak(text, bypassDebounce = false) {
+function speak(text, bypassDebounce = false, force = false) {
   if (!ttsEnabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  // Non-overlapping protection: if currently speaking, do not interrupt unless forced
+  if (window.speechSynthesis && window.speechSynthesis.speaking && !force) return;
   const now = Date.now();
   if (!bypassDebounce && (now - lastSpokenAt < TTS_DEBOUNCE_MS)) return;
   lastSpokenAt = now;
@@ -579,6 +590,98 @@ function calcAngle(A, B, C) {
   let angle = Math.abs(radians * 180 / Math.PI);
   if (angle > 180) angle = 360 - angle;
   return Math.round(angle);
+}
+
+function isLandmarkValid(pt) {
+  return Boolean(
+    pt &&
+    typeof pt.x === 'number' && Number.isFinite(pt.x) &&
+    typeof pt.y === 'number' && Number.isFinite(pt.y) &&
+    (pt.visibility === undefined || (typeof pt.visibility === 'number' && Number.isFinite(pt.visibility) && pt.visibility >= 0.5))
+  );
+}
+
+function areLandmarksValid(a, b, c) {
+  return isLandmarkValid(a) && isLandmarkValid(b) && isLandmarkValid(c);
+}
+
+/**
+ * Extracts left and right arm angles from landmarks (Direction B).
+ * - Left arm angle (L.Arm): shoulder-elbow-wrist (11, 13, 15) or hip-shoulder-elbow (23, 11, 13)
+ * - Right arm angle (R.Arm): shoulder-elbow-wrist (12, 14, 16) or hip-shoulder-elbow (24, 12, 14)
+ * - Arm: Math.round((leftAngle + rightAngle) / 2)
+ *
+ * @param {Array<Object>} landmarks - MediaPipe pose landmarks
+ * @param {'auto'|'elbow'|'shoulder'} mode - Preference for joint selection
+ * @returns {{ leftAngle: number, rightAngle: number, avgAngle: number }|null}
+ */
+function extractArmAngles(landmarks, mode = 'auto') {
+  if (!landmarks || !Array.isArray(landmarks) || landmarks.length < 17) return null;
+
+  let leftAngle = null;
+  const useElbow = (mode === 'elbow');
+  const useShoulderOnly = (mode === 'shoulder');
+
+  // Left arm angle: hip-shoulder-elbow (23, 11, 13) or shoulder-elbow-wrist (11, 13, 15)
+  if (!useElbow && landmarks.length > 23 &&
+      areLandmarksValid(landmarks[23], landmarks[11], landmarks[13])) {
+    leftAngle = calcAngle(landmarks[23], landmarks[11], landmarks[13]);
+  } else if (!useShoulderOnly &&
+      areLandmarksValid(landmarks[11], landmarks[13], landmarks[15])) {
+    leftAngle = calcAngle(landmarks[11], landmarks[13], landmarks[15]);
+  }
+
+  // Right arm angle: hip-shoulder-elbow (24, 12, 14) or shoulder-elbow-wrist (12, 14, 16)
+  let rightAngle = null;
+  if (!useElbow && landmarks.length > 24 &&
+      areLandmarksValid(landmarks[24], landmarks[12], landmarks[14])) {
+    rightAngle = calcAngle(landmarks[24], landmarks[12], landmarks[14]);
+  } else if (!useShoulderOnly &&
+      areLandmarksValid(landmarks[12], landmarks[14], landmarks[16])) {
+    rightAngle = calcAngle(landmarks[12], landmarks[14], landmarks[16]);
+  }
+
+  if (leftAngle === null || rightAngle === null || !Number.isFinite(leftAngle) || !Number.isFinite(rightAngle)) {
+    return null;
+  }
+
+  const avgAngle = Math.round((leftAngle + rightAngle) / 2);
+  return {
+    leftAngle,
+    rightAngle,
+    avgAngle
+  };
+}
+
+/**
+ * Publishes calculated arm angles to ThingsBoard MQTT via Socket.IO throttled to <= 2 Hz (every 500ms).
+ * Only executes when a designated Up pose is selected. Suppressed on non-up poses.
+ *
+ * @param {Array<Object>} landmarks - MediaPipe pose landmarks
+ * @param {number|null} forcedNow - Optional timestamp override for deterministic testing
+ * @returns {Object|null} Emitted payload or null if throttled / suppressed
+ */
+function publishAnglesThrottled(landmarks, forcedNow = null) {
+  if (!isFloainoPose(selectedPoseKey) || !landmarks) return null;
+  const now = (forcedNow !== null) ? forcedNow : Date.now();
+  if (now - lastAnglesPublishTime < ANGLES_PUBLISH_INTERVAL_MS) {
+    return null; // Throttled (at most once every 500ms)
+  }
+
+  const angles = extractArmAngles(landmarks);
+  if (!angles) return null;
+
+  lastAnglesPublishTime = now;
+  const payload = {
+    "L.Arm": String(angles.leftAngle),
+    "R.Arm": String(angles.rightAngle),
+    "Arm": String(angles.avgAngle)
+  };
+
+  if (socket && typeof socket.emit === 'function') {
+    socket.emit('publish_angles', payload);
+  }
+  return payload;
 }
 
 // ─── Pose Evaluation ──────────────────────────────────────────────────────────
@@ -744,8 +847,10 @@ function onPoseResults(results) {
     // Invert execution order: evaluate the pose before skeleton drawing
     const activePose = selectedPoseKey ? posesData[selectedPoseKey] : null;
     let evalResult = null;
-    // Only evaluate via MediaPipe landmarks when NOT an Up pose (Up poses evaluate via Floaino)
-    if (selectedPoseKey && !isFloainoPose(selectedPoseKey)) {
+    // Direction B: For Up poses, calculate arm angles and publish to ThingsBoard MQTT (throttled)
+    if (selectedPoseKey && isFloainoPose(selectedPoseKey)) {
+      publishAnglesThrottled(results.poseLandmarks);
+    } else if (selectedPoseKey) {
       evalResult = evaluatePose(results.poseLandmarks);
     }
 
@@ -999,12 +1104,19 @@ function handleFloainoPacket(packet) {
     // If nested under 'values', unwrap
     const target = (data.values && typeof data.values === 'object' && data.values !== null) ? data.values : data;
 
-    // Priority keys for Floaino posture telemetry
+    // Self-echo suppression: if packet contains MediaPipe's outgoing angle stream (L.Arm/R.Arm)
+    // without Floaino's evaluation key (IOT_GATEWAY), ignore to prevent self-evaluation echo loop.
+    if ((target['L.Arm'] !== undefined || target['R.Arm'] !== undefined) &&
+        target.IOT_GATEWAY === undefined && target.iot_gateway === undefined) {
+      return null;
+    }
+
+    // Priority keys for Floaino posture telemetry (IOT_GATEWAY has highest precedence)
     const priorityKeys = [
+      'IOT_GATEWAY', 'iot_gateway', 'gateway', 'Gateway',
       'Arm', 'arm', 'ARM',
       'Angle', 'angle', 'ANGLE',
       'Arm_Angle', 'arm_angle', 'ArmAngle', 'armAngle',
-      'IOT_GATEWAY', 'iot_gateway', 'gateway', 'Gateway',
       'posture', 'Posture', 'status', 'Status',
       'value', 'val'
     ];
@@ -1028,7 +1140,7 @@ function handleFloainoPacket(packet) {
 
   const parsed = parseFloainoValue(rawVal);
 
-  // Up Pose evaluation logic (Sole decider: Arm angle 150°–180°)
+  // Up Pose evaluation logic (Sole decider: Arm angle 150°–180° or Floaino IOT_GATEWAY true)
   const targetMin = 150;
   const targetMax = 180;
   let allCorrect = false;
@@ -1080,11 +1192,13 @@ function handleFloainoPacket(packet) {
     poseLabelEl.innerHTML = `${escapeHtml(poseName)} <span class="badge-floaino">📡 ข้อมูลจาก Floaino AI</span>`;
   }
 
-  // Drive Hold Timer and Audio Coaching
+  // Drive Hold Timer and Audio Coaching with State-Transition Gating
   const now = Date.now();
   if (allCorrect) {
     if (!isCompleted) {
       if (statusCardEl) statusCardEl.className = 'status-card correct';
+
+      const wasHolding = isHolding;
       if (!isHolding) {
         isHolding = true;
         holdStartTime = now;
@@ -1092,19 +1206,27 @@ function handleFloainoPacket(packet) {
       const elapsed = (now - holdStartTime) / 1000;
       updateTimerUI(elapsed);
 
-      const effectiveDuration = Math.max(1, targetHoldDuration || 3);
+      const effectiveDuration = Math.max(1, targetHoldDuration || 10);
       if (elapsed >= effectiveDuration) {
         isCompleted = true;
         isHolding = false;
-        onPoseComplete();
+        floainoAudioState = 'completed';
+        onPoseComplete('สำเร็จแล้วครับ');
       } else {
-        const msg = `${feedback} ค้างท่าไว้ ${effectiveDuration} วินาที และหายใจเข้า-ออกช้าๆ`;
-        if (adviceEl) adviceEl.textContent = msg;
-        speak(msg);
+        const remaining = Math.max(0, Math.ceil(effectiveDuration - elapsed));
+        const uiAdvice = `ท่าถูกต้อง ค้างไว้ ${remaining} วินาที`;
+        if (adviceEl) adviceEl.textContent = uiAdvice;
+
+        // State-transition gating: Only speak once upon entering correct hold
+        if (!wasHolding || floainoAudioState !== 'holding') {
+          floainoAudioState = 'holding';
+          speak('ท่าถูกต้อง ค้างไว้ครับ', true, true);
+        }
+        // While holding (seconds 1 to 9): Keep silent so user can focus and breathe
       }
     } else {
       if (statusCardEl) statusCardEl.className = 'status-card correct completed';
-      const effectiveDuration = Math.max(1, targetHoldDuration || 3);
+      const effectiveDuration = Math.max(1, targetHoldDuration || 10);
       updateTimerUI(effectiveDuration);
     }
   } else {
@@ -1113,7 +1235,12 @@ function handleFloainoPacket(packet) {
     isCompleted = false;
     updateTimerUI(0);
     if (adviceEl) adviceEl.textContent = feedback;
-    speak(feedback);
+
+    // State-transition gating: Only speak once upon transition to incorrect form
+    if (floainoAudioState !== 'incorrect') {
+      floainoAudioState = 'incorrect';
+      speak('ชูแขนขึ้นอีกครับ', true, true);
+    }
   }
 
   return {
@@ -1160,6 +1287,8 @@ function simulateFloaino(val) {
 
 if (typeof window !== 'undefined') {
   window.simulateFloaino = simulateFloaino;
+  window.extractArmAngles = extractArmAngles;
+  window.publishAnglesThrottled = publishAnglesThrottled;
 }
 
 // ─── Socket.IO Real-time Connection ───────────────────────────────────────────
@@ -1208,9 +1337,14 @@ if (typeof module !== 'undefined' && module.exports) {
     escapeHtml,
     onPoseComplete,
     renderPoseButtons,
-    // Floaino Exports
+    // Floaino Exports & Direction B
     FLOAINO_UP_POSES,
     isFloainoPose,
+    extractArmAngles,
+    publishAnglesThrottled,
+    ANGLES_PUBLISH_INTERVAL_MS,
+    getFloainoAudioState: () => floainoAudioState,
+    setFloainoAudioState: (s) => { floainoAudioState = s; },
     setEngine: (engine) => {},
     getEngine: () => isFloainoPose(selectedPoseKey) ? 'floaino' : 'mediapipe',
     stripQuotes,
@@ -1234,6 +1368,8 @@ if (typeof module !== 'undefined' && module.exports) {
       GRACE_PERIOD_MS,
       currentEngine: isFloainoPose(selectedPoseKey) ? 'floaino' : 'mediapipe',
       socket,
+      floainoAudioState,
+      lastAnglesPublishTime,
     }),
     setState: (updates) => {
       if (updates.selectedPoseKey !== undefined) selectedPoseKey = updates.selectedPoseKey;
@@ -1248,6 +1384,8 @@ if (typeof module !== 'undefined' && module.exports) {
       if (updates.autoAdvanceEnabled !== undefined) autoAdvanceEnabled = updates.autoAdvanceEnabled;
       if (updates.autoAdvanceTimer !== undefined) autoAdvanceTimer = updates.autoAdvanceTimer;
       if (updates.socket !== undefined) socket = updates.socket;
+      if (updates.floainoAudioState !== undefined) floainoAudioState = updates.floainoAudioState;
+      if (updates.lastAnglesPublishTime !== undefined) lastAnglesPublishTime = updates.lastAnglesPublishTime;
     }
   };
 }

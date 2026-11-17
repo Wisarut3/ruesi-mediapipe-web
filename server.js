@@ -31,9 +31,9 @@ mqttClient.on('connect', () => {
   console.log('✅ Connected to Floaino MQTT Broker:', MQTT_BROKER);
   io.emit('mqtt_status', { connected: true, token: FLOAINO_TOKEN });
 
-  mqttClient.subscribe(MQTT_TOPIC, (err) => {
+  mqttClient.subscribe([MQTT_TOPIC, 'v1/devices/me/telemetry'], (err) => {
     if (!err) {
-      console.log('📡 Subscribed to topic:', MQTT_TOPIC);
+      console.log('📡 Subscribed to topics:', MQTT_TOPIC, 'and v1/devices/me/telemetry');
     } else {
       console.error('❌ Subscription error:', err);
     }
@@ -75,8 +75,31 @@ io.on('connection', (socket) => {
       data: payload
     });
   });
+  socket.on('publish_angles', (payload) => {
+    if (!payload) return;
+    if (mqttClient && isMqttConnected) {
+      const jsonStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      if (jsonStr) {
+        mqttClient.publish(MQTT_TOPIC, jsonStr);
+        mqttClient.publish('v1/devices/me/telemetry', jsonStr);
+      }
+    }
+  });
 });
 
-server.listen(PORT, () => {
-  console.log(`🚀 Ruesi Posture Coaching server running at http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`🚀 Ruesi Posture Coaching server running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = {
+  app,
+  server,
+  io,
+  mqttClient,
+  FLOAINO_TOKEN,
+  MQTT_TOPIC,
+  getIsMqttConnected: () => isMqttConnected,
+  setIsMqttConnected: (v) => { isMqttConnected = v; }
+};
