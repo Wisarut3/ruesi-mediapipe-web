@@ -1342,6 +1342,40 @@ if (typeof window !== 'undefined') {
   window.publishAnglesThrottled = publishAnglesThrottled;
 }
 
+// ─── Pre-Exercise Safety Screening & Red Flags Interceptor ──────────────────
+function initSafetyScreening() {
+  if (typeof document === 'undefined') return;
+  const passBtn = document.getElementById('btn-screening-pass');
+  const failBtn = document.getElementById('btn-screening-fail');
+  const alertBox = document.getElementById('screening-alert-box');
+
+  if (passBtn) {
+    passBtn.addEventListener('click', () => {
+      if (alertBox) {
+        alertBox.style.display = 'block';
+        alertBox.className = 'screening-alert-box success';
+        alertBox.innerHTML = '✅ <strong>ผ่านการคัดกรอง:</strong> ท่านยืนยันว่าไม่มีอาการเสี่ยง (ไม่มีอาการปวดร้าว ชา หรืออักเสบเฉียบพลัน) สุขภาพพร้อมเริ่มฝึกครับ';
+      }
+      speak('ผ่านการคัดกรองความปลอดภัย เริ่มฝึกได้ครับ', true);
+    });
+  }
+
+  if (failBtn) {
+    failBtn.addEventListener('click', () => {
+      if (alertBox) {
+        alertBox.style.display = 'block';
+        alertBox.className = 'screening-alert-box danger';
+        alertBox.innerHTML = '🛑 <strong>พบสัญญาณอันตราย (Red Flags):</strong> มีอาการปวดร้าว ชา หรืออักเสบเฉียบพลัน <u>ระบบแนะนำให้หยุดการฝึกทันที</u> เพื่อความปลอดภัย และควรปรึกษาแพทย์แผนไทยประยุกต์หรือนักกายภาพบำบัดผู้เชี่ยวชาญ';
+      }
+      speak('มีสัญญาณอันตราย แนะนำให้หยุดฝึกและพบแพทย์ครับ', true, true);
+    });
+  }
+}
+
+if (typeof window !== 'undefined') {
+  initSafetyScreening();
+}
+
 // ─── Socket.IO Real-time Connection ───────────────────────────────────────────
 if (typeof io === 'function') {
   try {
@@ -1388,6 +1422,7 @@ if (typeof module !== 'undefined' && module.exports) {
     escapeHtml,
     onPoseComplete,
     renderPoseButtons,
+    initSafetyScreening,
     // Floaino Exports & Direction B
     FLOAINO_UP_POSES,
     isFloainoPose,

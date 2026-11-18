@@ -615,10 +615,163 @@ main { display: grid; grid-template-columns: 1fr 380px; flex: 1; overflow: hidde
   line-height: 1.4;
 }
 
+/* Pre-Exercise Safety Screening Card (Scope & Red Flags Interceptor) */
+.safety-screening-card {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid #3b82f6;
+  border-left: 5px solid #38bdf8;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.safety-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.safety-badge-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.safety-scope-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.safety-card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1.35;
+}
+
+.safety-scope-desc {
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+
+.safety-redflags-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.45rem 0.65rem;
+  background: rgba(239, 68, 68, 0.08);
+  border-left: 3px solid #ef4444;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: #fca5a5;
+  line-height: 1.4;
+}
+
+.safety-redflags-list strong {
+  color: #fee2e2;
+}
+
+.safety-action-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.2rem;
+}
+
+.btn-screening {
+  padding: 0.55rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  border: 1px solid transparent;
+}
+
+.btn-screening.pass {
+  background: #064e3b;
+  color: #6ee7b7;
+  border-color: #059669;
+}
+
+.btn-screening.pass:hover {
+  background: #047857;
+  color: #ffffff;
+}
+
+.btn-screening.danger {
+  background: #450a0a;
+  color: #fca5a5;
+  border-color: #b91c1c;
+}
+
+.btn-screening.danger:hover {
+  background: #7f1d1d;
+  color: #ffffff;
+}
+
+.screening-alert-box {
+  padding: 0.65rem 0.8rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  animation: fadeInAlert 0.25s ease-out;
+}
+
+.screening-alert-box.success {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid #10b981;
+  color: #6ee7b7;
+}
+
+.screening-alert-box.danger {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid #ef4444;
+  color: #fca5a5;
+}
+
+@keyframes fadeInAlert {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .cautions-section {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.cautions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.scope-indicator {
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  padding: 0.12rem 0.45rem;
+  border-radius: 4px;
 }
 
 .caution-group {
@@ -629,6 +782,11 @@ main { display: grid; grid-template-columns: 1fr 380px; flex: 1; overflow: hidde
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+.caution-group.caution-redflags {
+  border-left: 4px solid #ef4444;
+  background: rgba(239, 68, 68, 0.08);
 }
 
 .caution-group.caution-elderly {
@@ -652,6 +810,32 @@ main { display: grid; grid-template-columns: 1fr 380px; flex: 1; overflow: hidde
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+}
+
+.caution-badge.redflag-badge {
+  color: #f87171;
+}
+
+.redflag-list {
+  list-style: disc;
+  margin-left: 1.2rem;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.medical-referral-note {
+  margin-top: 0.4rem;
+  padding: 0.45rem 0.6rem;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 6px;
+  font-size: 0.76rem;
+  color: #e2e8f0;
+  line-height: 1.4;
+  border-left: 2px solid #38bdf8;
 }
 
 .caution-elderly .caution-badge {

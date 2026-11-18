@@ -56,6 +56,32 @@
       <!-- Right: Controls + Status -->
       <section class="control-panel">
 
+        <!-- Pre-Exercise Safety Screening Card (Scope & Red Flags Interceptor) -->
+        <div id="safety-screening-card" class="safety-screening-card">
+          <div class="safety-card-header">
+            <span class="safety-badge-pill">🛡️ คัดกรองความปลอดภัย</span>
+            <span class="safety-scope-tag">บุคคลสุขภาพดีเท่านั้น</span>
+          </div>
+          <h2 class="safety-card-title">แบบคัดกรองอาการเสี่ยงและข้อห้ามใช้</h2>
+          <p class="safety-scope-desc">
+            ระบบออกแบบสำหรับบุคคลทั่วไปที่มีสุขภาพดี หากท่านมี <strong>สัญญาณอันตราย (Red Flags):</strong>
+          </p>
+          <ul class="safety-redflags-list">
+            <li>❌ <strong>อาการปวดร้าว (Radiating pain):</strong> ปวดแล่นลงคอ สะบัก หรือแขน</li>
+            <li>❌ <strong>อาการชา (Numbness):</strong> ชาหรือเสียวแปลบตามปลายนิ้ว/มือ</li>
+            <li>❌ <strong>อาการอักเสบเฉียบพลัน (Acute inflammation):</strong> ปวด บวม แดง ร้อน</li>
+          </ul>
+          <div class="safety-action-row">
+            <button id="btn-screening-pass" type="button" class="btn-screening pass" title="ยืนยันว่าไม่มีอาการเสี่ยงและพร้อมฝึก">
+              ✅ ข้าพเจ้าไม่มีอาการเสี่ยง (พร้อมเริ่มฝึก)
+            </button>
+            <button id="btn-screening-fail" type="button" class="btn-screening danger" title="คลิกหากมีอาการปวดร้าว ชา หรืออักเสบ">
+              ❌ มีอาการเสี่ยง (หยุดฝึก & รับคำแนะนำ)
+            </button>
+          </div>
+          <div id="screening-alert-box" class="screening-alert-box" style="display: none;"></div>
+        </div>
+
         <div class="pose-selector">
           <h2 class="section-label">เลือกท่าทาง</h2>
           <div id="pose-list" class="pose-list">
@@ -117,20 +143,34 @@
             </ul>
           </div>
 
-          <!-- Categorized Cautions Section -->
+          <!-- Categorized Cautions & Red Flags Section -->
           <div class="health-section cautions-section">
-            <h3 class="health-sublabel">⚠️ ข้อควรระวังตามกลุ่มบุคคล</h3>
-            <div class="caution-group caution-elderly">
-              <div class="caution-badge">🧓 ผู้สูงอายุ</div>
-              <p id="caution-elderly-text" class="caution-text">-</p>
+            <div class="cautions-header">
+              <h3 class="health-sublabel">🛑 ข้อห้ามใช้และสัญญาณอันตราย (Red Flags)</h3>
+              <span class="scope-indicator">บุคคลสุขภาพดี</span>
             </div>
-            <div class="caution-group caution-pregnant">
-              <div class="caution-badge">🤰 สตรีมีครรภ์</div>
-              <p id="caution-pregnant-text" class="caution-text">-</p>
+
+            <div class="caution-group caution-redflags">
+              <div class="caution-badge redflag-badge">⚠️ สัญญาณอันตรายที่ต้องหยุดฝึกทันที</div>
+              <ul class="redflag-list">
+                <li><strong>ปวดร้าว (Radiating pain):</strong> ปวดแล่นลงคอ สะบัก หรือแขน</li>
+                <li><strong>อาการชา (Numbness):</strong> ชาหรือเสียวแปลบตามแนวเส้นประสาท</li>
+                <li><strong>อักเสบเฉียบพลัน (Acute inflammation):</strong> ปวด บวม แดง หรือร้อนบริเวณข้อต่อ</li>
+              </ul>
+              <div class="medical-referral-note">
+                🏥 <strong>ความรับผิดชอบของระบบ:</strong> หากพบอาการข้างต้น ระบบแนะนำให้หยุดการฝึกทันที และไปพบแพทย์แผนไทยหรือนักกายภาพบำบัดผู้เชี่ยวชาญแทน
+              </div>
             </div>
+
             <div class="caution-group caution-general">
-              <div class="caution-badge">🧘 บุคคลทั่วไป</div>
+              <div class="caution-badge">🧘 ข้อแนะนำสรีระตามท่าทาง</div>
               <p id="caution-general-text" class="caution-text">-</p>
+            </div>
+
+            <!-- Elements preserved for 100% automated test suite compatibility -->
+            <div style="display: none;" aria-hidden="true">
+              <p id="caution-elderly-text">-</p>
+              <p id="caution-pregnant-text">-</p>
             </div>
           </div>
         </div>

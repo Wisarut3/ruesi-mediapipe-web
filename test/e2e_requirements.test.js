@@ -1681,4 +1681,33 @@ test('Tier 5: Adversarial Hardening & Stress Testing', async (t) => {
       '.caution-text must contain word-break: break-word'
     );
   });
+
+  await t.test('T5_ADV_08: Safety screening gate intercepts red flags (radiating pain, numbness, acute inflammation)', () => {
+    const env = createMockEnvironment();
+    global.document = env.mockDocument;
+    global.window = env.mockWindow;
+    delete require.cache[require.resolve('../public/script.js')];
+    const script = require('../public/script.js');
+
+    const passBtn = env.getOrCreateElement('btn-screening-pass', 'button');
+    const failBtn = env.getOrCreateElement('btn-screening-fail', 'button');
+    const alertBox = env.getOrCreateElement('screening-alert-box', 'div');
+
+    script.initSafetyScreening();
+
+    // 1. Pass click
+    passBtn.click();
+    assert.ok(alertBox.innerHTML.includes('ผ่านการคัดกรอง'), 'Clicking pass should display healthy confirmation');
+    assert.equal(alertBox.className, 'screening-alert-box success');
+
+    // 2. Fail / Red flag click
+    failBtn.click();
+    assert.ok(alertBox.innerHTML.includes('พบสัญญาณอันตราย'), 'Clicking fail should flag danger');
+    assert.ok(alertBox.innerHTML.includes('ปวดร้าว'), 'Should mention radiating pain');
+    assert.ok(alertBox.innerHTML.includes('ชา'), 'Should mention numbness');
+    assert.ok(alertBox.innerHTML.includes('อักเสบเฉียบพลัน'), 'Should mention acute inflammation');
+    assert.ok(alertBox.innerHTML.includes('หยุดการฝึกทันที'), 'Should advise stopping exercise');
+    assert.ok(alertBox.innerHTML.includes('ผู้เชี่ยวชาญ'), 'Should advise seeing specialist');
+    assert.equal(alertBox.className, 'screening-alert-box danger');
+  });
 });
